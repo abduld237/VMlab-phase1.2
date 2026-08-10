@@ -1,0 +1,469 @@
+[
+  {
+    "document_id": "VMLAB-KB-01",
+    "doc_number": "01",
+    "title": "Cover Page, Document Control, Executive Summary & Domain Purpose",
+    "domain": "commercial",
+    "rule_prefixes": [],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "1-2",
+    "page_count": 2,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-01.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-02",
+    "doc_number": "02",
+    "title": "Domain Scope, Objectives & Commercial Philosophy 1. Domain Scope The Commercial Intelligence Domain Defines The Knowledge Boundaries Used By The Vmlab",
+    "domain": "commercial",
+    "rule_prefixes": [],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "3-3",
+    "page_count": 1,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-02.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-03",
+    "doc_number": "03",
+    "title": "Retail Fundamentals & Core Commercial Principles",
+    "domain": "commercial",
+    "rule_prefixes": [],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "4-5",
+    "page_count": 2,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-03.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-04",
+    "doc_number": "04",
+    "title": "Customer Intelligence \u2013 Customer Definition, Needs & Objectives 1. Customer Definition Within Vmlab, A Customer Is Any Individual Or Group Interacting With A Retail Environment",
+    "domain": "commercial",
+    "rule_prefixes": [],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "6-7",
+    "page_count": 2,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-04.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-05",
+    "doc_number": "05",
+    "title": "Document 7",
+    "domain": "retail_psychology",
+    "rule_prefixes": [],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "8-9",
+    "page_count": 2,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-05.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-06",
+    "doc_number": "06",
+    "title": "Customer Journey Framework 1. Purpose",
+    "domain": "retail_psychology",
+    "rule_prefixes": [],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "10-11",
+    "page_count": 2,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-06.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-07",
+    "doc_number": "07",
+    "title": "Customer Decision-Making Process 1. Purpose The Customer Decision-Making Process Provides The Framework Used By Vmlab Ai To",
+    "domain": "retail_psychology",
+    "rule_prefixes": [],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "12-13",
+    "page_count": 2,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-07.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-08",
+    "doc_number": "08",
+    "title": "Customer Confidence, Trust & Friction 1. Purpose Customer Confidence Is The Belief That A Customer Can Make The Correct Purchasing Decision",
+    "domain": "retail_psychology",
+    "rule_prefixes": [],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "14-16",
+    "page_count": 3,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-08.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-09",
+    "doc_number": "09",
+    "title": "Product Discovery & Product Findability 1. Purpose Product Discovery And Product Findability Describe How Effectively Customers Can Locate,",
+    "domain": "creative_vm",
+    "rule_prefixes": [],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "17-19",
+    "page_count": 3,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-09.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-10",
+    "doc_number": "10",
+    "title": "Visual Merchandising Principles 1. Purpose Visual Merchandising (Vm) Is The Strategic Presentation Of Products, Categories And Retail",
+    "domain": "creative_vm",
+    "rule_prefixes": [],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "20-22",
+    "page_count": 3,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-10.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-11",
+    "doc_number": "11",
+    "title": "Store Layout, Customer Flow & Navigation",
+    "domain": "creative_vm",
+    "rule_prefixes": [
+      "NAV",
+      "SIG",
+      "FLW",
+      "ZON",
+      "ENT",
+      "FIX",
+      "ACC",
+      "ADJ",
+      "OPS",
+      "GEN",
+      "PRO",
+      "MEA",
+      "DIG"
+    ],
+    "version": "1.0",
+    "validity_status": "superseded",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "23-51",
+    "page_count": 29,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-11_superseded.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-12",
+    "doc_number": "12",
+    "title": "Product Presentation Standards",
+    "domain": "creative_vm",
+    "rule_prefixes": [
+      "PPS"
+    ],
+    "version": "1.0",
+    "validity_status": "superseded",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "52-95",
+    "page_count": 44,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-12_superseded.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-11",
+    "doc_number": "11",
+    "title": "Store Layout, Customer Flow & Navigation",
+    "domain": "creative_vm",
+    "rule_prefixes": [
+      "NAV",
+      "SIG",
+      "FLW",
+      "ZON",
+      "ENT",
+      "FIX",
+      "ACC",
+      "ADJ",
+      "OPS",
+      "GEN",
+      "PRO",
+      "MEA",
+      "DIG"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "96-155",
+    "page_count": 60,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-11.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-12",
+    "doc_number": "12",
+    "title": "Product Presentation Standards",
+    "domain": "creative_vm",
+    "rule_prefixes": [
+      "PPS"
+    ],
+    "version": "2.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "156-233",
+    "page_count": 78,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-12.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-14A.1",
+    "doc_number": "14A.1",
+    "title": "Foundations Of Consumer Psychology",
+    "domain": "retail_psychology",
+    "rule_prefixes": [
+      "CP"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "234-264",
+    "page_count": 31,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-14A.1.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-14A.2",
+    "doc_number": "14A.2",
+    "title": "Human Decision Making & Motivation",
+    "domain": "retail_psychology",
+    "rule_prefixes": [],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "265-301",
+    "page_count": 37,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-14A.2.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-14A.3",
+    "doc_number": "14A.3",
+    "title": "Attention, Perception, Memory & Decision Fatigue",
+    "domain": "retail_psychology",
+    "rule_prefixes": [
+      "APMDF"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "302-341",
+    "page_count": 40,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-14A.3.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-16",
+    "doc_number": "16",
+    "title": "Promotional Strategy & Campaign Execution Enterprise Commercial Standard And Ai/Rag Reference",
+    "domain": "commercial",
+    "rule_prefixes": [
+      "PCE"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "342-371",
+    "page_count": 30,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-16.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-17",
+    "doc_number": "17",
+    "title": "Pricing Architecture & Value Communication Enterprise Commercial Standard And Ai/Rag Reference",
+    "domain": "commercial",
+    "rule_prefixes": [
+      "PAC"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_17_30",
+    "source_pages": "1-37",
+    "page_count": 37,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-17.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-18",
+    "doc_number": "18",
+    "title": "Inventory Intelligence & Product Lifecycle Enterprise Commercial Standard And Ai/Rag Reference",
+    "domain": "commercial",
+    "rule_prefixes": [
+      "IPL"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_17_30",
+    "source_pages": "38-82",
+    "page_count": 45,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-18.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-19",
+    "doc_number": "19",
+    "title": "Stock Availability, Replenishment & Gap Management Enterprise Commercial Standard And Ai/Rag Reference",
+    "domain": "commercial",
+    "rule_prefixes": [
+      "SAG"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_17_30",
+    "source_pages": "83-120",
+    "page_count": 38,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-19.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-20",
+    "doc_number": "20",
+    "title": "Commercial Operations Standards Enterprise Retail Operating Standard And Ai/Rag Reference",
+    "domain": "commercial",
+    "rule_prefixes": [
+      "COS"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_17_30",
+    "source_pages": "121-162",
+    "page_count": 42,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-20.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-21",
+    "doc_number": "21",
+    "title": "Store Standards, Cleanliness & Maintenance Enterprise Store Environment Standard And Ai/Rag Reference",
+    "domain": "commercial",
+    "rule_prefixes": [
+      "SSM"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_17_30",
+    "source_pages": "163-201",
+    "page_count": 39,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-21.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-22",
+    "doc_number": "22",
+    "title": "Commercial Performance Framework Enterprise Kpi, Diagnostic, Governance And Ai/Rag Reference",
+    "domain": "commercial",
+    "rule_prefixes": [
+      "CPF"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_17_30",
+    "source_pages": "202-240",
+    "page_count": 39,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-22.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-23",
+    "doc_number": "23",
+    "title": "Kpis, Metrics & Commercial Measurement Enterprise Metric Definition, Governance, Interpretation And Ai/Rag Reference",
+    "domain": "commercial",
+    "rule_prefixes": [
+      "KMM",
+      "CDF"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_17_30",
+    "source_pages": "241-289",
+    "page_count": 49,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-23.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-24",
+    "doc_number": "24",
+    "title": "Document 289",
+    "domain": "system",
+    "rule_prefixes": [
+      "AOF"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_17_30",
+    "source_pages": "290-338",
+    "page_count": 49,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-24.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-27",
+    "doc_number": "27",
+    "title": "Priority Scoring & Recommendation Ranking Enterprise Decision-Scoring, Ranking, Governance And Benefit-Realisation",
+    "domain": "system",
+    "rule_prefixes": [
+      "PSR"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_17_30",
+    "source_pages": "339-372",
+    "page_count": 34,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-27.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-29",
+    "doc_number": "29",
+    "title": "Business Rules, Ai Rules & Knowledge Relationships Enterprise Rule Architecture, Ai Control Standard, Ontology And Knowledge-Graph",
+    "domain": "system",
+    "rule_prefixes": [
+      "BRK"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_17_30",
+    "source_pages": "373-413",
+    "page_count": 41,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-29.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-30",
+    "doc_number": "30",
+    "title": "Glossary, Definitions, Reference Tables & Appendices Enterprise Controlled Vocabulary, Formula Reference, Data Dictionary And",
+    "domain": "system",
+    "rule_prefixes": [
+      "GRA"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "bundle_17_30",
+    "source_pages": "414-464",
+    "page_count": 51,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-30.pdf"
+  }
+]
