@@ -391,3 +391,55 @@ Against the environment you intend to demonstrate:
 - Test users `remon@vmlab.test` (Pilot Retailer One, admin) and
   `tenant-b@vmlab.test` (Pilot Retailer Two, user) exist for isolation testing.
   Delete both before any real pilot.
+
+---
+
+## 11. Roles and provisioning
+
+Two roles per tenant, `admin` and `user`, on `profiles`. Authorisation is the
+database's: `brand_identity_admin_write` requires `is_tenant_admin()`, and the
+route handler deliberately contains no role check of its own, so there is
+nothing that can drift out of step with the policy.
+
+**Provisioning is manual and deliberately so** (FR-16 — administrator-created
+tenants, no self-service). `authenticated` has no `insert` on `profiles`, so a
+new user must be assigned by someone with database access:
+
+```sql
+insert into public.profiles (user_id, tenant_id, role, display_name)
+select u.id, t.id, 'admin', 'Their Name'
+from auth.users u, public.tenants t
+where u.email = 'them@example.com' and t.name = 'Pilot Retailer Three';
+```
+
+A signed-in user with no profile row gets **403 "user is not assigned to a
+workspace"** from `deps.py` before any data is touched. That is the intended
+behaviour, not a bug — but it is the first thing a new tester will hit, so
+provision them before they try.
+
+### A privilege escalation that was live, and how it was found
+
+`profiles_update_self` originally let a user update their own row and checked
+only that they did not change tenant. Nothing constrained `role`, so any
+standard user could set themselves to `admin` and gain every admin permission in
+their workspace — including rewriting the brand profile that conditions every
+analysis the whole tenant runs.
+
+It was not reachable only through our API. **Supabase publishes PostgREST at
+`/rest/v1/` against the same tables under the same RLS**, so a user's own
+session token plus the publishable anon key — both in the browser by design —
+were enough:
+
+```
+PATCH /rest/v1/profiles?user_id=eq.<self>   {"role": "admin"}
+```
+
+Confirmed against the live project: 200, role `admin`, after which a brand write
+refused with 403 seconds earlier succeeded. Fixed in migration
+`0006_profile_privilege_escalation.sql` and asserted in `db/test/`.
+
+**The lesson generalises.** Our API is not the only door to this database. Any
+policy that is loose enough to matter is reachable directly over PostgREST with
+credentials the browser already has. Review RLS policies as though the API did
+not exist, and prefer `db/test/run.sh` — which drives SQL directly — over
+API-level tests when checking an authorisation boundary.

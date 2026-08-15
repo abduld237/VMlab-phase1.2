@@ -174,5 +174,63 @@ begin
 end
 $$;
 
+-- ---------------------------------------------------------------------------
+-- Privilege escalation: a standard user must not be able to promote themselves.
+--
+-- This was a live defect. profiles_update_self constrained tenant_id but said
+-- nothing about role, so Bob could set his own row to 'admin' and inherit every
+-- admin-gated permission -- brand_identity_admin_write in particular, which
+-- conditions every analysis his whole workspace runs. It was reachable without
+-- touching our API at all: Supabase publishes PostgREST over the same tables
+-- with the same RLS, so a session token and the public anon key were enough.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+    current_role_value public.user_role;
+begin
+    -- Bob is a standard user in Beta Stores.
+    select role into current_role_value from public.profiles
+        where user_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+    if current_role_value <> 'user' then
+        raise exception 'FAIL: fixture expected Bob to be a standard user, got %', current_role_value;
+    end if;
+
+    begin
+        update public.profiles set role = 'admin'
+            where user_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+        -- RLS refuses the write rather than matching zero rows, because the
+        -- WITH CHECK is what rejects it.
+        raise exception 'FAIL: standard user promoted themselves to admin';
+    exception
+        when insufficient_privilege or check_violation then
+            raise notice 'PASS: self-promotion to admin rejected';
+    end;
+
+    select role into current_role_value from public.profiles
+        where user_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+    if current_role_value <> 'user' then
+        raise exception 'FAIL: Bob is now %', current_role_value;
+    end if;
+    raise notice 'PASS: role unchanged after the attempt';
+
+    -- The legitimate self-service edit must still work.
+    update public.profiles set display_name = 'Bob Renamed'
+        where user_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+    raise notice 'PASS: a user may still edit their own display name';
+
+    -- Creating a profile is provisioning, not self-service: otherwise a user
+    -- could assign themselves into any tenant whose id they can guess.
+    begin
+        insert into public.profiles (user_id, tenant_id, role)
+        values ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+                '11111111-1111-1111-1111-111111111111', 'admin');
+        raise exception 'FAIL: user inserted their own profile row';
+    exception
+        when insufficient_privilege then
+            raise notice 'PASS: profile insert rejected';
+    end;
+end
+$$;
+
 reset role;
 \echo 'ALL ISOLATION ASSERTIONS PASSED'
