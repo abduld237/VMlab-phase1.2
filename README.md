@@ -19,30 +19,52 @@ docs/            Open dependencies and handover notes
 
 ## Running it
 
+Copy `.env.example` to `.env` and fill it in first (see `docs/HANDOVER.md` §2 —
+the connection string is not the one Supabase shows you first). The API refuses
+to start if row level security is not enabled and forced on every tenant-owned
+table.
+
+**One-time setup**, from the repo root:
+
 ```bash
-# 1. Database (Docker) — applies migrations and runs the isolation suite
-./db/test/run.sh
-
-# 2. Backend
-cd apps/api && pip install -e ".[dev]"
-uvicorn vmlab.main:app --reload          # http://localhost:8000/docs
-
-# 3. Frontend
-cd apps/web && npm install && npm run dev
+python3 -m venv .venv
+.venv/bin/pip install -r apps/api/requirements-dev.txt   # runtime + pytest + ruff
+(cd apps/web && npm install)
 ```
 
-Copy `.env.example` to `.env` first. The API refuses to start if row level
-security is not enabled and forced on every tenant-owned table.
+Use the venv rather than whatever Python happens to be on `PATH`. The pins in
+`apps/api/requirements.txt` are the versions this system was built and verified
+against; `pyproject.toml` declares the same set as loose ranges for tooling.
+
+**Every run** — two terminals:
+
+```bash
+# Terminal 1 — backend on :8000
+cd apps/api && ../../.venv/bin/python -m uvicorn vmlab.main:app --port 8000 --reload
+
+# Terminal 2 — frontend on :3000
+cd apps/web && npm run dev
+```
+
+Then open <http://localhost:3000/login>. `apps/web/.env.local` holds the
+frontend's own variables — Next.js only reads `NEXT_PUBLIC_*` from the app
+directory, never from the repo root `.env`.
+
+Running the backend from `apps/api` matters: the `vmlab` package is imported
+from the working directory, and ingestion scripts resolve `data/` relative to
+the repo root.
 
 ## Tests
 
 ```bash
-cd apps/api && pytest              # 40 tests
+cd apps/api && ../../.venv/bin/python -m pytest -q    # 61 tests
 cd apps/web && npm run typecheck && npx next build
-./db/test/run.sh                   # SQL-level isolation assertions
+./db/test/run.sh                                      # SQL-level isolation assertions
 ```
 
 Docker is required for the database-backed tests; they skip without it.
+`db/test/run.sh` creates fixture tenants and does not clean up — never point it
+at a real database.
 
 ## Knowledge base
 
@@ -52,13 +74,13 @@ with misleading filenames. Splitting them is a prerequisite for everything else
 untrustworthy.
 
 ```bash
-python3 scripts/split_bundles.py       # 29 documents -> data/split/
-python3 scripts/check_models.py        # verify configured model IDs
-python3 scripts/ingest_kb.py --dry-run # chunk without embedding or writing
+.venv/bin/python scripts/split_bundles.py       # 29 documents -> data/split/
+.venv/bin/python scripts/check_models.py        # verify configured model IDs
+.venv/bin/python scripts/ingest_kb.py --dry-run # chunk without embedding or writing
+.venv/bin/python scripts/ingest_kb.py           # embed and write; idempotent per document
 ```
 
-The dry run currently produces 4,533 chunks from 59 sources at an estimated
-$0.019 to embed. Run it after any change to chunking and compare — a swing in
+The live corpus is **62 documents, 4,771 chunks**. Run it after any change to chunking and compare — a swing in
 chunk count means the rule-block handling has broken, which is far cheaper to
 catch there than in retrieval results.
 
@@ -85,6 +107,10 @@ A two-perspective analysis that looks complete is worse than an error.
 
 ## Status
 
-See `docs/OPEN_DEPENDENCIES.md`. In short: the pipeline cannot run live until an
-OpenRouter key exists, and the acceptance demo needs real display photographs,
-which the client's corpus does not contain.
+All seven Month-1 acceptance criteria pass end to end against the live Supabase
+project, verified in a browser. Measured 119–293s and $0.0020–0.0032 per
+analysis; the PRD's 60s target is not met and is recorded as a known gap.
+
+Not yet deployed, and sign-in needs real SMTP configured before anyone outside
+the team can log in. Full detail, including every operational trap worth
+knowing, is in `docs/HANDOVER.md`.

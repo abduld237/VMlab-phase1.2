@@ -1,0 +1,33 @@
+# Backend runtime dependencies, pinned to the versions this system was built and
+# verified against. `pyproject.toml` declares the same set as ranges; this file is
+# the reproducible install.
+#
+#   python3 -m venv .venv                      (from the repo root)
+#   .venv/bin/pip install -r apps/api/requirements.txt
+#
+# Regenerate after changing a dependency:
+#   .venv/bin/pip freeze > apps/api/requirements.lock.txt
+
+fastapi==0.137.2
+uvicorn[standard]==0.49.0
+python-multipart==0.0.32
+
+pydantic==2.13.2
+pydantic-settings==2.12.0
+
+httpx==0.28.1
+
+# `binary` avoids needing libpq headers to build; `pool` is the async pool the
+# tenancy layer configures with keepalives and a liveness check.
+psycopg[binary,pool]==3.3.4
+
+# Supabase issues asymmetric (JWKS) tokens; the API verifies them with PyJWT.
+PyJWT[crypto]==2.12.1
+
+langgraph==1.2.4
+
+# Ingestion: PDFs, workbooks, slide decks, and image normalisation.
+pypdf==6.14.2
+openpyxl==3.1.5
+python-pptx==1.0.2
+pillow==12.3.0

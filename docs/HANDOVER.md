@@ -75,26 +75,58 @@ nonsense.
 
 ## 3. Running it locally
 
-```bash
-# Backend
-cd apps/api
-python3 -m uvicorn vmlab.main:app --host 127.0.0.1 --port 8000
+Python 3.11+ (built and verified on 3.13.13) and Node 20+.
 
-# Frontend
+### One-time setup
+
+From the repo root:
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r apps/api/requirements-dev.txt
+(cd apps/web && npm install)
+```
+
+`apps/api/requirements.txt` is the pinned runtime set — the exact versions this
+system was verified against. `requirements-dev.txt` adds pytest and ruff on top.
+`pyproject.toml` declares the same dependencies as loose ranges and supports
+`pip install -e ".[dev]"` if you prefer that; the pinned files are what to use
+when you want the build that is known to work.
+
+**Install into the venv, not into a global or conda base environment.** The
+`.venv/` directory is gitignored, so it is per-machine and must be recreated
+after cloning.
+
+### Every run — two terminals
+
+```bash
+# Terminal 1 — backend on :8000
+cd apps/api
+../../.venv/bin/python -m uvicorn vmlab.main:app --host 127.0.0.1 --port 8000 --reload
+
+# Terminal 2 — frontend on :3000
 cd apps/web
-npm install
-npx next dev -p 3000
+npm run dev
 ```
 
 Open http://localhost:3000/login. The API verifies RLS on all 11 tables at
 startup and refuses to serve if any table is unprotected — if startup fails,
-read that message before anything else.
+read that message before anything else. A healthy boot logs
+`row level security verified on 11 tables`.
+
+Start the backend from `apps/api`: the `vmlab` package is imported from the
+working directory. Ingestion scripts, by contrast, run from the repo root
+because they resolve `data/` relative to it.
+
+If the port is already taken, `uvicorn` still exits non-zero but a stale server
+keeps answering on :8000 — and you will spend an hour testing code you did not
+just change. Check with `ss -ltnp | grep 8000` before assuming a restart took.
 
 **Tests:**
 
 ```bash
-cd apps/api && python3 -m pytest tests/ -q      # 59 tests
-bash db/test/run.sh                              # SQL isolation, needs Docker
+cd apps/api && ../../.venv/bin/python -m pytest tests/ -q   # 61 tests
+bash db/test/run.sh                                          # SQL isolation, needs Docker
 ```
 
 `db/test/run.sh` spins up a throwaway Postgres. Do not point it at a real
@@ -146,10 +178,12 @@ full re-embed.
 
 ### Re-running ingestion
 
+From the repo root:
+
 ```bash
-python3 scripts/split_bundles.py     # splits the merged PDFs; run first
-python3 scripts/ingest_kb.py --dry-run
-python3 scripts/ingest_kb.py
+.venv/bin/python scripts/split_bundles.py     # splits the merged PDFs; run first
+.venv/bin/python scripts/ingest_kb.py --dry-run
+.venv/bin/python scripts/ingest_kb.py
 ```
 
 Ingestion is idempotent per document — re-running replaces a document's chunks
