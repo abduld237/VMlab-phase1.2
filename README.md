@@ -20,12 +20,23 @@ data/benchmark/  20 real display photographs, the acceptance set
 
 ## Running it
 
-Copy `.env.example` to `.env` and fill it in first (see `docs/HANDOVER.md` §2 —
-the connection string is not the one Supabase shows you first). The API refuses
-to start if row level security is not enabled and forced on every tenant-owned
-table.
+Prerequisites: Python 3.11+ (built on 3.13) and Node 20+. Docker only for the
+database-backed tests.
 
-**One-time setup**, from the repo root:
+### 1. Configuration, once
+
+```bash
+cp .env.example .env          # then fill it in
+```
+
+`docs/HANDOVER.md` §2 has the values and two traps worth reading before you
+guess: the database host is **not** the one Supabase shows you first, and the
+password must be percent-encoded. `apps/web/.env.local` is separate — Next.js
+reads `NEXT_PUBLIC_*` only from its own directory, never from the repo root.
+
+### 2. Install, once
+
+From the repo root:
 
 ```bash
 python3 -m venv .venv
@@ -33,39 +44,86 @@ python3 -m venv .venv
 (cd apps/web && npm install)
 ```
 
-Use the venv rather than whatever Python happens to be on `PATH`. The pins in
-`apps/api/requirements.txt` are the versions this system was built and verified
-against; `pyproject.toml` declares the same set as loose ranges for tooling.
+Use the venv rather than whatever Python is on `PATH`. `requirements.txt` pins
+the versions this system was verified against; `pyproject.toml` declares the
+same set as loose ranges for tooling. `.venv/` is gitignored, so it has to be
+recreated after cloning.
 
-**Every run** — two terminals:
+### 3. Run — two terminals
 
 ```bash
-# Terminal 1 — backend on :8000
+# Terminal 1 — API on :8000
 cd apps/api && ../../.venv/bin/python -m uvicorn vmlab.main:app --port 8000 --reload
 
-# Terminal 2 — frontend on :3000
+# Terminal 2 — web on :3000
 cd apps/web && npm run dev
 ```
 
-Then open <http://localhost:3000/login>. `apps/web/.env.local` holds the
-frontend's own variables — Next.js only reads `NEXT_PUBLIC_*` from the app
-directory, never from the repo root `.env`.
+Open <http://localhost:3000/login>.
 
-Running the backend from `apps/api` matters: the `vmlab` package is imported
-from the working directory, and ingestion scripts resolve `data/` relative to
-the repo root.
+A healthy API logs `row level security verified on 11 tables`. If that line is
+missing the API refuses to serve at all — read the startup error before
+anything else, because it means a table is unprotected.
+
+Start the API from `apps/api`: the `vmlab` package is imported from the working
+directory. Ingestion and benchmark scripts run from the **repo root** instead,
+because they resolve `data/` relative to it.
+
+### 4. Stopping
+
+```bash
+pkill -f "uvicorn vmlab.main:app"
+pkill -f "next dev"; pkill -f next-server
+```
+
+Confirm with `ss -ltnp | grep -E ':8000|:3000'` — it should print nothing. A
+stale server on :8000 keeps answering after a failed restart, and you will
+spend an hour testing code you did not just change.
+
+### Signing in
+
+Login is a magic link, and Supabase's built-in mailer sends only a few messages
+an hour and will not deliver to a made-up domain at all. For local work set
+
+```
+NEXT_PUBLIC_ALLOW_PASSWORD_LOGIN=true
+```
+
+in `apps/web/.env.local` and restart the frontend. Leave it unset in production
+and configure real SMTP under `Authentication → Emails`.
+
+**A signed-in user still needs a workspace.** Tenants are administrator-created
+(FR-16) and `authenticated` cannot insert into `profiles`, so a new account gets
+`403 user is not assigned to a workspace` until someone assigns it:
+
+```sql
+insert into public.profiles (user_id, tenant_id, role, display_name)
+select u.id, t.id, 'admin', 'Their Name'
+from auth.users u, public.tenants t
+where u.email = 'them@example.com' and t.name = 'Pilot Retailer Three';
+```
+
+That 403 is the isolation model working, not a bug. See `docs/HANDOVER.md` §11.
 
 ## Tests
 
 ```bash
 cd apps/api && ../../.venv/bin/python -m pytest -q    # 95 tests
 cd apps/web && npm run typecheck && npx next build
-./db/test/run.sh                                      # SQL-level isolation assertions
+bash db/test/run.sh                                   # SQL-level isolation assertions
 ```
 
 Docker is required for the database-backed tests; they skip without it.
-`db/test/run.sh` creates fixture tenants and does not clean up — never point it
-at a real database.
+`db/test/run.sh` spins up a throwaway Postgres, creates fixture tenants and does
+not clean up — never point it at a real database.
+
+**Run `db/test/run.sh` before every deploy.** It drives SQL directly rather than
+going through the API, which is the only way to test an authorisation boundary
+honestly: our API is not the only door to this database. Supabase publishes
+PostgREST over the same tables under the same RLS, so a policy that is loose
+enough to matter is reachable with credentials the browser already holds. A
+privilege escalation that let any user promote themselves to tenant admin lived
+here for weeks and was invisible to every API-level test.
 
 ## Knowledge base
 
