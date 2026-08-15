@@ -1,0 +1,300 @@
+{
+  "label": "optimised",
+  "recorded_at": "2026-08-15T17:08:51",
+  "config": {
+    "vision_model": "qwen/qwen3.7-flash",
+    "reasoning_model": "openai/gpt-oss-120b",
+    "image_long_edge_px": 1600,
+    "retrieval_top_k": 8
+  },
+  "summary": {
+    "images": 8,
+    "completed": 8,
+    "completion_rate": 100.0,
+    "p50_s": 50.1,
+    "p90_s": 60.1,
+    "max_s": 61.4,
+    "mean_cost_usd": 0.004141,
+    "under_60s": 6,
+    "p50_evidence_s": 42.4,
+    "p50_retrieval_s": 2.8,
+    "p50_specialists_s": 2.8,
+    "p50_synthesis_s": 2.5,
+    "total_attempts": 41,
+    "retried_stages": 1
+  },
+  "runs": [
+    {
+      "image": "1.png",
+      "ok": true,
+      "total_s": 44.2,
+      "evidence_s": 33.7,
+      "retrieval_s": 5.3,
+      "specialists_s": 2.5,
+      "synthesis_s": 2.7,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "qwen/qwen3.7-flash via Alibaba",
+        "commercial": "openai/gpt-oss-120b via Groq",
+        "creative_vm": "openai/gpt-oss-120b via Groq",
+        "retail_psychology": "openai/gpt-oss-120b via Groq",
+        "synthesis": "openai/gpt-oss-120b via Groq"
+      },
+      "cost_usd": 0.003835,
+      "prompt_tokens": 14944,
+      "completion_tokens": 4449,
+      "items_per_perspective": {
+        "commercial": 3,
+        "creative_vm": 4,
+        "retail_psychology": 4
+      },
+      "citations": 24,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "10.png",
+      "ok": true,
+      "total_s": 45.3,
+      "evidence_s": 37.7,
+      "retrieval_s": 3.1,
+      "specialists_s": 2.2,
+      "synthesis_s": 2.2,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "qwen/qwen3.7-flash via Alibaba",
+        "commercial": "openai/gpt-oss-120b via Groq",
+        "creative_vm": "openai/gpt-oss-120b via Groq",
+        "retail_psychology": "openai/gpt-oss-120b via Groq",
+        "synthesis": "openai/gpt-oss-120b via Groq"
+      },
+      "cost_usd": 0.004391,
+      "prompt_tokens": 16603,
+      "completion_tokens": 4885,
+      "items_per_perspective": {
+        "commercial": 5,
+        "creative_vm": 5,
+        "retail_psychology": 5
+      },
+      "citations": 30,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "12.png",
+      "ok": true,
+      "total_s": 49.5,
+      "evidence_s": 42.4,
+      "retrieval_s": 2.7,
+      "specialists_s": 2.3,
+      "synthesis_s": 2.2,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "qwen/qwen3.7-flash via Alibaba",
+        "commercial": "openai/gpt-oss-120b via Groq",
+        "creative_vm": "openai/gpt-oss-120b via Groq",
+        "retail_psychology": "openai/gpt-oss-120b via Groq",
+        "synthesis": "openai/gpt-oss-120b via Groq"
+      },
+      "cost_usd": 0.004069,
+      "prompt_tokens": 15046,
+      "completion_tokens": 4951,
+      "items_per_perspective": {
+        "commercial": 5,
+        "creative_vm": 3,
+        "retail_psychology": 4
+      },
+      "citations": 21,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "13.png",
+      "ok": true,
+      "total_s": 60.1,
+      "evidence_s": 50.3,
+      "retrieval_s": 2.7,
+      "specialists_s": 4.6,
+      "synthesis_s": 2.4,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 2,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "qwen/qwen3.7-flash via Alibaba",
+        "commercial": "openai/gpt-oss-120b via Groq",
+        "creative_vm": "openai/gpt-oss-120b via Groq",
+        "retail_psychology": "openai/gpt-oss-120b via Groq",
+        "synthesis": "openai/gpt-oss-120b via Groq"
+      },
+      "cost_usd": 0.004316,
+      "prompt_tokens": 19415,
+      "completion_tokens": 5537,
+      "items_per_perspective": {
+        "commercial": 4,
+        "creative_vm": 5,
+        "retail_psychology": 5
+      },
+      "citations": 26,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "14.png",
+      "ok": true,
+      "total_s": 42.8,
+      "evidence_s": 33.7,
+      "retrieval_s": 2.6,
+      "specialists_s": 4.0,
+      "synthesis_s": 2.5,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "qwen/qwen3.7-flash via Alibaba",
+        "commercial": "openai/gpt-oss-120b via Groq",
+        "creative_vm": "openai/gpt-oss-120b via Groq",
+        "retail_psychology": "openai/gpt-oss-120b via Groq",
+        "synthesis": "openai/gpt-oss-120b via Groq"
+      },
+      "cost_usd": 0.004088,
+      "prompt_tokens": 14144,
+      "completion_tokens": 4927,
+      "items_per_perspective": {
+        "commercial": 5,
+        "creative_vm": 5,
+        "retail_psychology": 4
+      },
+      "citations": 25,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "15.png",
+      "ok": true,
+      "total_s": 50.1,
+      "evidence_s": 41.8,
+      "retrieval_s": 2.9,
+      "specialists_s": 2.8,
+      "synthesis_s": 2.6,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "qwen/qwen3.7-flash via Alibaba",
+        "commercial": "openai/gpt-oss-120b via Groq",
+        "creative_vm": "openai/gpt-oss-120b via Groq",
+        "retail_psychology": "openai/gpt-oss-120b via Groq",
+        "synthesis": "openai/gpt-oss-120b via Groq"
+      },
+      "cost_usd": 0.003994,
+      "prompt_tokens": 14278,
+      "completion_tokens": 4989,
+      "items_per_perspective": {
+        "commercial": 4,
+        "creative_vm": 5,
+        "retail_psychology": 4
+      },
+      "citations": 24,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "16.png",
+      "ok": true,
+      "total_s": 56.8,
+      "evidence_s": 47.9,
+      "retrieval_s": 2.2,
+      "specialists_s": 3.6,
+      "synthesis_s": 3.1,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "qwen/qwen3.7-flash via Alibaba",
+        "commercial": "openai/gpt-oss-120b via Groq",
+        "creative_vm": "openai/gpt-oss-120b via Groq",
+        "retail_psychology": "openai/gpt-oss-120b via Groq",
+        "synthesis": "openai/gpt-oss-120b via Groq"
+      },
+      "cost_usd": 0.004028,
+      "prompt_tokens": 16263,
+      "completion_tokens": 4826,
+      "items_per_perspective": {
+        "commercial": 4,
+        "creative_vm": 3,
+        "retail_psychology": 4
+      },
+      "citations": 26,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "17.png",
+      "ok": true,
+      "total_s": 61.4,
+      "evidence_s": 53.6,
+      "retrieval_s": 2.8,
+      "specialists_s": 2.4,
+      "synthesis_s": 2.5,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "qwen/qwen3.7-flash via Alibaba",
+        "commercial": "openai/gpt-oss-120b via Groq",
+        "creative_vm": "openai/gpt-oss-120b via Groq",
+        "retail_psychology": "openai/gpt-oss-120b via Groq",
+        "synthesis": "openai/gpt-oss-120b via Groq"
+      },
+      "cost_usd": 0.004409,
+      "prompt_tokens": 15850,
+      "completion_tokens": 5616,
+      "items_per_perspective": {
+        "commercial": 5,
+        "creative_vm": 4,
+        "retail_psychology": 5
+      },
+      "citations": 27,
+      "actions": 3,
+      "errors": []
+    }
+  ]
+}

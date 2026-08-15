@@ -1,0 +1,246 @@
+{
+  "label": "baseline",
+  "recorded_at": "2026-08-15T16:59:58",
+  "config": {
+    "vision_model": "qwen/qwen3.7-flash",
+    "reasoning_model": "openai/gpt-oss-120b",
+    "image_long_edge_px": 1600,
+    "retrieval_top_k": 8
+  },
+  "summary": {
+    "images": 8,
+    "completed": 6,
+    "completion_rate": 75.0,
+    "p50_s": 194.9,
+    "p90_s": 263.4,
+    "max_s": 295.8,
+    "mean_cost_usd": 0.002657,
+    "under_60s": 0,
+    "p50_evidence_s": 73.1,
+    "p50_retrieval_s": 7.4,
+    "p50_specialists_s": 70.8,
+    "p50_synthesis_s": 40.7,
+    "total_attempts": 34,
+    "retried_stages": 4
+  },
+  "runs": [
+    {
+      "image": "1.png",
+      "ok": true,
+      "total_s": 140.4,
+      "evidence_s": 34.1,
+      "retrieval_s": 7.4,
+      "specialists_s": 74.8,
+      "synthesis_s": 24.1,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "qwen/qwen3.7-flash via Alibaba",
+        "commercial": "openai/gpt-oss-120b via AkashML",
+        "creative_vm": "openai/gpt-oss-120b via CoreWeave",
+        "retail_psychology": "openai/gpt-oss-120b via CoreWeave",
+        "synthesis": "openai/gpt-oss-120b via Novita"
+      },
+      "cost_usd": 0.002364,
+      "prompt_tokens": 13929,
+      "completion_tokens": 7942,
+      "items_per_perspective": {
+        "commercial": 4,
+        "creative_vm": 4,
+        "retail_psychology": 5
+      },
+      "citations": 35,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "10.png",
+      "ok": true,
+      "total_s": 198.8,
+      "evidence_s": 38.7,
+      "retrieval_s": 7.6,
+      "specialists_s": 23.5,
+      "synthesis_s": 129.0,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "qwen/qwen3.7-flash via Alibaba",
+        "commercial": "openai/gpt-oss-120b via AkashML",
+        "creative_vm": "openai/gpt-oss-120b via Novita",
+        "retail_psychology": "openai/gpt-oss-120b via AkashML",
+        "synthesis": "openai/gpt-oss-120b via DeepInfra"
+      },
+      "cost_usd": 0.003232,
+      "prompt_tokens": 15627,
+      "completion_tokens": 8895,
+      "items_per_perspective": {
+        "commercial": 4,
+        "creative_vm": 4,
+        "retail_psychology": 5
+      },
+      "citations": 41,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "12.png",
+      "ok": true,
+      "total_s": 194.9,
+      "evidence_s": 77.8,
+      "retrieval_s": 5.6,
+      "specialists_s": 70.8,
+      "synthesis_s": 40.7,
+      "attempts": {
+        "vision": 2,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "qwen/qwen3.7-flash via Alibaba",
+        "commercial": "openai/gpt-oss-120b via CoreWeave",
+        "creative_vm": "openai/gpt-oss-120b via DeepInfra",
+        "retail_psychology": "openai/gpt-oss-120b via CoreWeave",
+        "synthesis": "openai/gpt-oss-120b via CoreWeave"
+      },
+      "cost_usd": 0.002,
+      "prompt_tokens": 15546,
+      "completion_tokens": 9770,
+      "items_per_perspective": {
+        "commercial": 5,
+        "creative_vm": 4,
+        "retail_psychology": 5
+      },
+      "citations": 27,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "13.png",
+      "ok": false,
+      "stage": "analysis",
+      "error": "TimeoutError: ",
+      "wall_s": 420.0
+    },
+    {
+      "image": "14.png",
+      "ok": true,
+      "total_s": 192.4,
+      "evidence_s": 73.1,
+      "retrieval_s": 8.5,
+      "specialists_s": 80.5,
+      "synthesis_s": 30.3,
+      "attempts": {
+        "vision": 2,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "qwen/qwen3.7-flash via Alibaba",
+        "commercial": "openai/gpt-oss-120b via DeepInfra",
+        "creative_vm": "openai/gpt-oss-120b via DeepInfra",
+        "retail_psychology": "openai/gpt-oss-120b via Mancer 2",
+        "synthesis": "openai/gpt-oss-120b via Together"
+      },
+      "cost_usd": 0.003833,
+      "prompt_tokens": 14584,
+      "completion_tokens": 9680,
+      "items_per_perspective": {
+        "commercial": 5,
+        "creative_vm": 4,
+        "retail_psychology": 4
+      },
+      "citations": 30,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "15.png",
+      "ok": true,
+      "total_s": 263.4,
+      "evidence_s": 94.4,
+      "retrieval_s": 5.1,
+      "specialists_s": 69.1,
+      "synthesis_s": 94.7,
+      "attempts": {
+        "vision": 2,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "qwen/qwen3.7-flash via Alibaba",
+        "commercial": "openai/gpt-oss-120b via DeepInfra",
+        "creative_vm": "openai/gpt-oss-120b via CoreWeave",
+        "retail_psychology": "openai/gpt-oss-120b via DeepInfra",
+        "synthesis": "openai/gpt-oss-120b via CoreWeave"
+      },
+      "cost_usd": 0.002145,
+      "prompt_tokens": 15320,
+      "completion_tokens": 10600,
+      "items_per_perspective": {
+        "commercial": 4,
+        "creative_vm": 4,
+        "retail_psychology": 5
+      },
+      "citations": 33,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "16.png",
+      "ok": false,
+      "stage": "analysis",
+      "error": "TimeoutError: ",
+      "wall_s": 420.0
+    },
+    {
+      "image": "17.png",
+      "ok": true,
+      "total_s": 295.8,
+      "evidence_s": 87.0,
+      "retrieval_s": 8.2,
+      "specialists_s": 81.1,
+      "synthesis_s": 119.5,
+      "attempts": {
+        "vision": 2,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "qwen/qwen3.7-flash via Alibaba",
+        "commercial": "openai/gpt-oss-120b via DeepInfra",
+        "creative_vm": "openai/gpt-oss-120b via Novita",
+        "retail_psychology": "openai/gpt-oss-120b via CoreWeave",
+        "synthesis": "openai/gpt-oss-120b via CoreWeave"
+      },
+      "cost_usd": 0.00237,
+      "prompt_tokens": 17305,
+      "completion_tokens": 10594,
+      "items_per_perspective": {
+        "commercial": 4,
+        "creative_vm": 5,
+        "retail_psychology": 4
+      },
+      "citations": 35,
+      "actions": 3,
+      "errors": []
+    }
+  ]
+}

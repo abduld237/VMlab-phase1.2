@@ -51,21 +51,34 @@ class Settings(BaseSettings):
     # 2026-08-04. Verify again before changing one -- the catalogue moves fast
     # and a stale ID fails at request time, not at startup.
 
-    # Vision model for evidence extraction: one call per analysis on a resized
-    # image, so it is the single most expensive step and it sets the whole
-    # per-analysis figure.
+    # Vision model for evidence extraction: one call per analysis, and for a
+    # long time the single slowest stage in the pipeline by a wide margin.
     #
-    # Qwen's current flagship is qwen3.8-max, but at $2.00/M in and $6.00/M out
-    # it costs about $0.0108 per vision call and pushes the total to ~$0.0118 --
-    # inside the $0.01-0.05 quoted to the client, but only just. qwen3.7-flash
-    # is one release behind, keeps the same 1M context, and costs $0.03/M in,
-    # which brings the total back to ~$0.0012 and leaves the quoted range with
-    # real headroom at pilot volume.
+    # Measured on six benchmark photographs, mean wall time per call:
     #
-    # Swap to "qwen/qwen3.8-max" if evidence quality proves insufficient on the
-    # benchmark set -- that is the trade this line is making, and it should be
-    # decided on measured output rather than assumed.
-    vision_model: str = "qwen/qwen3.7-flash"
+    #   qwen/qwen3.7-flash                44.1s   6-7 observations
+    #   qwen/qwen3.7-flash, thinking off  23.7s   5 observations, thinner notes
+    #   google/gemini-2.5-flash-lite       6.1s   6-7 observations
+    #
+    # qwen is served by exactly one endpoint at 24 tokens/second, so there is no
+    # routing fix for it and its reasoning-effort setting is ignored -- only
+    # disabling thinking outright moves it, and that costs evidence detail.
+    # gemini-2.5-flash-lite is served by five endpoints, honours the controlled
+    # vocabulary in the schema more faithfully, and supports strict structured
+    # outputs, which removes the retry risk from the most expensive call.
+    #
+    # It costs $0.10/M in against qwen's $0.03/M -- about $0.0004 more per
+    # analysis, which is noise inside the $0.01-0.05 quoted to the client.
+    #
+    # One known trait: it reports model_confidence as 1.0 on almost every
+    # observation, where qwen discriminates between 0.8 and 0.95. That affects
+    # the internal evidence record, not the confidence shown to the user, which
+    # comes from the specialists. Worth revisiting if the evidence confidence
+    # ever drives a decision.
+    #
+    # Any replacement must support structured outputs, or the strict-schema
+    # request below will find no eligible provider and fail with a 404.
+    vision_model: str = "google/gemini-2.5-flash-lite"
     # The three specialists and the synthesiser run over extracted evidence
     # rather than the image, so a text-only model is both cheaper and better at
     # holding to an output schema. Open-weight, Apache 2.0, $0.04/M in.
@@ -77,21 +90,65 @@ class Settings(BaseSettings):
     embedding_model: str = "baai/bge-m3"
     embedding_dimensions: int = 1024
 
+    # --- Provider routing ---------------------------------------------------
+    # One model id is not one service. openai/gpt-oss-120b is served by twenty
+    # endpoints whose measured throughput spans 18 to 940 tokens/second, and
+    # OpenRouter routes by *price* unless told otherwise -- so the default picks
+    # from the slow tail. That, not the prompts, is what made the same analysis
+    # take 119s one run and 360s the next: identical work, identical token
+    # counts, whichever cheap provider happened to catch the call.
+    #
+    # Sorting by throughput with a price ceiling buys the fast mid-tier
+    # (Groq, Nebius, BaseTen at 240-395 tok/s) while excluding the premium tier.
+    # Prices are US dollars per million tokens. Set provider_sort to "" to
+    # restore OpenRouter's default routing.
+    provider_sort: str = "throughput"
+    provider_max_price_prompt: float = 0.15
+    provider_max_price_completion: float = 0.60
+    # Only route to providers that honour every parameter we send. Without it a
+    # request asking for a strict JSON schema can land on a provider that
+    # ignores it and answers in prose.
+    provider_require_parameters: bool = True
+
+    # How hard the reasoning model thinks before answering. Empty leaves it at
+    # the model's own default, which is deliberately what we do.
+    #
+    # "low" was tried and measured against the default on the same eight images:
+    # it saved 2.5s (p50 15.1s against 17.6s) and a third of the cost, but
+    # returned 17% fewer citations (31.6 per run against 38.0) and dropped the
+    # thinnest perspective from four items to three. Once routing made both
+    # options finish in under twenty seconds, spending 2.5s on better-supported
+    # findings was the easy trade -- the client judges this on whether the
+    # recommendations are useful, and a citation is what makes one checkable.
+    #
+    # Set to "low" if latency ever becomes tight again; it is the cheapest
+    # remaining lever and it costs evidence quality rather than correctness.
+    reasoning_effort: str = ""
+    # Strict provider-side schema enforcement, so a malformed response cannot
+    # happen rather than being caught and retried. Every retry is a duplicate
+    # call, and the retry tail is where the worst latency lives.
+    use_strict_schemas: bool = True
+
     # --- Pipeline limits ---------------------------------------------------
     # The client's own Photo Standards sheet specifies a 1600px long edge, so
     # the pipeline resizes to match what its knowledge base was written around.
     image_long_edge_px: int = 1600
     max_upload_bytes: int = 15 * 1024 * 1024
-    # PRD §8 targets a result inside 60s where practical and allows longer
-    # when progress is communicated, which the UI does. This is the hard
-    # ceiling before a run is abandoned, not the expected duration.
+    # PRD §8 targets a result inside 60s. Measured over all twenty benchmark
+    # photographs from Dhaka against the live knowledge base: p50 14.5s, p90
+    # 18.1s, slowest 20.5s, 20 of 20 inside the target.
     #
-    # Raised from 180 after measuring real runs against the live knowledge base
-    # at 225-237s: the old ceiling killed healthy analyses seconds before they
-    # finished. It is a backstop, not a target -- the 60s goal is a latency
-    # problem to solve, and most of the current gap is the Dhaka-to-London
-    # round trip on every database call, which deploying in London removes.
-    analysis_timeout_seconds: int = 420
+    # This is the backstop before a run is abandoned, not the expected duration.
+    # 120s is roughly six times the slowest measured run, which leaves room for
+    # a bad provider day without letting a genuinely stuck analysis sit for
+    # seven minutes. It was 420s when a normal run took 200-360s.
+    #
+    # A previous version of this comment blamed the latency on the Dhaka-to-
+    # London database round trip. That was wrong, and worth recording as wrong:
+    # retrieval was 6-8s of a 119-360s run. The cost was provider routing --
+    # OpenRouter sorts by price by default, and the cheapest endpoints serving
+    # our reasoning model run at 18-25 tokens/second against Groq's 395.
+    analysis_timeout_seconds: int = 120
     retrieval_top_k: int = 8
 
     @property

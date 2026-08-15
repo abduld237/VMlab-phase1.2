@@ -29,10 +29,60 @@ class OpenRouterError(RuntimeError):
     """A request to OpenRouter failed in a way the caller cannot retry blindly."""
 
 
+# Strict structured-output schemas are a restricted subset of JSON Schema:
+# validation keywords are rejected outright rather than ignored, so a schema
+# generated straight from pydantic fails the request with a 400.
+_UNSUPPORTED_KEYWORDS = frozenset(
+    {
+        "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf",
+        "minItems", "maxItems", "minLength", "maxLength", "pattern", "format",
+        "default",
+    }
+)
+
+
+def strict_schema(schema: Any) -> Any:
+    """Rewrite a pydantic JSON schema into the strict structured-output subset.
+
+    Three rules, applied everywhere in the tree: no unsupported validation
+    keywords, no additional properties, and every declared property listed as
+    required. The last is the surprising one -- strict mode has no concept of an
+    optional field, so a field that pydantic made optional must be *required and
+    nullable* instead. Pydantic already emits `anyOf: [T, null]` for `X | None`,
+    and fields that merely carry a default are safe to demand outright because
+    the model can return the empty value.
+
+    The bounds this drops (confidence 0-1, rank 1-3) are not lost: pydantic still
+    validates the parsed response, so an out-of-range value fails there exactly
+    as it did before. Losing them from the schema costs a hint, not a guarantee.
+    """
+    if isinstance(schema, list):
+        return [strict_schema(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+
+    cleaned = {
+        key: strict_schema(value)
+        for key, value in schema.items()
+        if key not in _UNSUPPORTED_KEYWORDS
+    }
+
+    if isinstance(cleaned.get("properties"), dict):
+        cleaned["additionalProperties"] = False
+        cleaned["required"] = list(cleaned["properties"])
+
+    return cleaned
+
+
 @dataclass
 class Completion:
     text: str
     model: str
+    # Which upstream actually served this call. OpenRouter picks per request from
+    # a pool whose measured throughput spans 18 to 940 tok/s for one model id, so
+    # without recording this a slow analysis is indistinguishable from a slow
+    # model -- which is exactly the confusion that hid a 20x latency spread.
+    provider: str = ""
     prompt_tokens: int = 0
     completion_tokens: int = 0
     cost_usd: float = 0.0
@@ -64,12 +114,14 @@ class OpenRouterClient:
             self._client = httpx.AsyncClient(
                 base_url=self.settings.openrouter_base_url,
                 # Read timeout sits above the slowest single call, not above a
-                # whole analysis. Synthesis measures 106-110s against the live
-                # corpus, so the old 120s left no headroom and a run that had
-                # already paid for evidence, retrieval and three specialists
-                # died on the last call with a bare ReadTimeout. The analysis
-                # ceiling in Settings is what bounds total duration.
-                timeout=httpx.Timeout(240.0, connect=30.0),
+                # whole analysis; the ceiling in Settings bounds the latter.
+                #
+                # 90s is generous against measured calls -- the slowest stage is
+                # now evidence extraction at 5-12s -- but a single call is
+                # exactly where a bad provider hurts, and allow_fallbacks only
+                # helps when the request fails rather than crawls. It was 240s
+                # when synthesis routinely took 106-190s.
+                timeout=httpx.Timeout(90.0, connect=30.0),
                 headers={
                     "Authorization": f"Bearer {self.settings.openrouter_api_key}",
                     "Content-Type": "application/json",
@@ -94,6 +146,29 @@ class OpenRouterClient:
 
     # -- chat ---------------------------------------------------------------
 
+    def _routing(self) -> dict[str, Any] | None:
+        """Provider preferences for one request, or None to accept the default.
+
+        Left unset, OpenRouter picks the cheapest endpoint serving a model. For
+        openai/gpt-oss-120b that means choosing from a pool spanning 18 to 940
+        tokens per second, which is how one analysis took 119s and the next 360s
+        for identical work. Sorting by throughput under a price ceiling makes the
+        speed predictable and the cost bounded.
+        """
+        settings = self.settings
+        if not settings.provider_sort:
+            return None
+        return {
+            "sort": settings.provider_sort,
+            "max_price": {
+                "prompt": settings.provider_max_price_prompt,
+                "completion": settings.provider_max_price_completion,
+            },
+            "require_parameters": settings.provider_require_parameters,
+            # Deliberately leaving allow_fallbacks at its default of true: a
+            # provider going down should cost latency, not the whole analysis.
+        }
+
     async def complete(
         self,
         *,
@@ -102,6 +177,9 @@ class OpenRouterClient:
         temperature: float = 0.2,
         max_tokens: int = 2000,
         json_object: bool = False,
+        json_schema: dict[str, Any] | None = None,
+        schema_name: str = "response",
+        reasoning: dict[str, Any] | None = None,
     ) -> Completion:
         payload: dict[str, Any] = {
             "model": model,
@@ -112,8 +190,27 @@ class OpenRouterClient:
             # us guessing from the text length.
             "usage": {"include": True},
         }
-        if json_object:
+        # A strict schema is enforced by the provider's decoder, so the response
+        # cannot be malformed; json_object only asks for "some JSON" and leaves
+        # the shape to chance, and a wrong shape costs a full retry.
+        if json_schema is not None:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": schema_name, "strict": True, "schema": json_schema},
+            }
+        elif json_object:
             payload["response_format"] = {"type": "json_object"}
+
+        if reasoning is not None:
+            # Hidden reasoning tokens are generated at the same rate as visible
+            # ones, so on a slow endpoint they are pure latency. Takes either
+            # {"effort": "low"} to shorten the thinking or {"enabled": False} to
+            # turn it off for a stage that does not need it.
+            payload["reasoning"] = reasoning
+
+        routing = self._routing()
+        if routing is not None:
+            payload["provider"] = routing
 
         # Retry transient failures. Without this a single dropped connection
         # ends an analysis that has already paid for every stage before it --
@@ -161,6 +258,7 @@ class OpenRouterClient:
         return Completion(
             text=body["choices"][0]["message"].get("content") or "",
             model=body.get("model", model),
+            provider=body.get("provider") or "",
             prompt_tokens=usage.get("prompt_tokens", 0),
             completion_tokens=usage.get("completion_tokens", 0),
             cost_usd=float(usage.get("cost") or 0.0),

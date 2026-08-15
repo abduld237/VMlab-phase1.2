@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from vmlab.graph.pipeline import run_analysis  # noqa: E402
 from vmlab.graph.schemas import Perspective  # noqa: E402
 from vmlab.models.openrouter import Completion, OpenRouterError  # noqa: E402
+from vmlab.retrieval.retriever import RetrievedChunk  # noqa: E402
 
 EVIDENCE = {
     "display_type": "end-cap",
@@ -101,7 +102,7 @@ class StubClient:
     async def describe_image(self, **kwargs):
         self.vision_calls += 1
         return Completion(
-            text=json.dumps(EVIDENCE), model="stub-vision",
+            text=json.dumps(EVIDENCE), model="stub-vision", provider="TestProvider",
             prompt_tokens=100, completion_tokens=50, cost_usd=0.001,
         )
 
@@ -118,7 +119,7 @@ class StubClient:
         if isinstance(user_content, list):
             self.vision_calls += 1
             return Completion(
-                text=json.dumps(EVIDENCE), model="stub-vision",
+                text=json.dumps(EVIDENCE), model="stub-vision", provider="TestProvider",
                 prompt_tokens=100, completion_tokens=50, cost_usd=0.001,
             )
 
@@ -126,7 +127,7 @@ class StubClient:
 
         if "SPECIALIST FINDINGS" in body:
             return Completion(
-                text=json.dumps(SYNTHESIS), model="stub-text",
+                text=json.dumps(SYNTHESIS), model="stub-text", provider="TestProvider",
                 prompt_tokens=200, completion_tokens=80, cost_usd=0.002,
             )
 
@@ -137,7 +138,7 @@ class StubClient:
                 raise OpenRouterError(f"stubbed failure for {name}")
 
         return Completion(
-            text=json.dumps(ITEMS), model="stub-text",
+            text=json.dumps(ITEMS), model="stub-text", provider="TestProvider",
             prompt_tokens=150, completion_tokens=60, cost_usd=0.0015,
         )
 
@@ -218,3 +219,56 @@ async def test_quality_flags_carry_into_the_result():
 
     assert result.low_confidence is True
     assert "image appears soft or out of focus" in result.evidence.image_quality_notes
+
+
+class StubRetriever:
+    """Returns one identifiable chunk per domain, so refs can be traced back."""
+
+    async def search(self, *, domain, embedding, tenant_id, top_k):
+        return [
+            RetrievedChunk(
+                id=f"chunk-{domain}-{index}",
+                document_id="VMLAB-KB-12",
+                title="Product Presentation Standards",
+                domain=domain,
+                authority="canonical",
+                content="...",
+                section_path=None,
+                page=1,
+                rule_ids=["PPS-001"],
+                distance=0.1,
+            )
+            for index in range(2)
+        ]
+
+
+async def test_retrieved_chunks_are_reported_per_perspective():
+    # The persist layer writes analyses.retrieved_chunk_ids and each section's
+    # evidence_refs from this key. It was missing for the whole build, so every
+    # completed analysis recorded an empty audit trail -- and an audit trail
+    # nobody asserts on fails silently, which is the only way it can fail.
+    client = StubClient()
+
+    _, telemetry = await run_analysis(
+        client=client, retriever=StubRetriever(), image_bytes=b"fake", tenant_id=None
+    )
+
+    refs = telemetry["evidence_refs"]
+    assert set(refs) == {p.value for p in Perspective}
+    assert refs["commercial"] == ["chunk-commercial-0", "chunk-commercial-1"]
+    # The flat list is what the analyses row stores; it must cover every domain.
+    assert len(telemetry["retrieved_chunk_ids"]) == 6
+
+
+async def test_the_serving_provider_is_recorded_per_stage():
+    # A model id is not a service: the same id is served by endpoints ranging
+    # from 18 to 940 tokens/second, so the provider is the part that explains a
+    # slow run after the fact.
+    client = StubClient()
+
+    _, telemetry = await run_analysis(
+        client=client, retriever=None, image_bytes=b"fake", tenant_id=None
+    )
+
+    assert telemetry["model_versions"]["vision"] == "stub-vision via TestProvider"
+    assert telemetry["stage_attempts"]["synthesis"] == 1

@@ -67,14 +67,25 @@ async def retrieve_knowledge(
     embeddings = await client.embed([query])
     vector = embeddings[0]
 
-    retrieved: dict[str, list] = {}
-    for perspective in Perspective:
-        retrieved[perspective.value] = await retriever.search(
-            domain=perspective.value,
-            embedding=vector,
-            tenant_id=state.get("tenant_id"),
-            top_k=get_settings().retrieval_top_k,
+    # The three searches are independent and each is a round trip to a database
+    # in another continent, so running them in sequence pays that cost three
+    # times for no reason. The pool allows ten connections; three is safe.
+    perspectives = list(Perspective)
+    results = await asyncio.gather(
+        *(
+            retriever.search(
+                domain=perspective.value,
+                embedding=vector,
+                tenant_id=state.get("tenant_id"),
+                top_k=get_settings().retrieval_top_k,
+            )
+            for perspective in perspectives
         )
+    )
+    retrieved: dict[str, list] = {
+        perspective.value: chunks
+        for perspective, chunks in zip(perspectives, results, strict=True)
+    }
 
     total = sum(len(v) for v in retrieved.values())
     logger.info("retrieved %d chunks across %d domains", total, len(retrieved))
@@ -191,6 +202,7 @@ async def run_analysis(
         "retrieved": {},
         "findings": [],
         "stage_timings_ms": {},
+        "stage_attempts": {},
         "model_versions": {},
         "cost_usd": 0.0,
         "prompt_tokens": 0,
@@ -214,6 +226,7 @@ async def run_analysis(
 
     telemetry = {
         "stage_timings_ms": {**final.get("stage_timings_ms", {}), "total": elapsed_ms},
+        "stage_attempts": final.get("stage_attempts", {}),
         "model_versions": final.get("model_versions", {}),
         "cost_usd": round(final.get("cost_usd", 0.0), 6),
         "prompt_tokens": final.get("prompt_tokens", 0),
@@ -224,5 +237,14 @@ async def run_analysis(
             for chunks in (final.get("retrieved") or {}).values()
             for chunk in chunks
         ],
+        # Keyed by perspective as well as flattened, because each specialist's
+        # section records the chunks that specialist actually saw. The persist
+        # layer reads this key; without it the audit columns were written empty
+        # on every analysis, and the whole point of them is being able to prove
+        # after the fact which knowledge a tenant's result was built from.
+        "evidence_refs": {
+            domain: [chunk.id for chunk in chunks]
+            for domain, chunks in (final.get("retrieved") or {}).items()
+        },
     }
     return result, telemetry

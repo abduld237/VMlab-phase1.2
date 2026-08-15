@@ -125,7 +125,7 @@ just change. Check with `ss -ltnp | grep 8000` before assuming a restart took.
 **Tests:**
 
 ```bash
-cd apps/api && ../../.venv/bin/python -m pytest tests/ -q   # 61 tests
+cd apps/api && ../../.venv/bin/python -m pytest tests/ -q   # 95 tests
 bash db/test/run.sh                                          # SQL isolation, needs Docker
 ```
 
@@ -228,16 +228,53 @@ uncertainty note.
 
 ### Measured, not estimated
 
+All twenty benchmark photographs, run from Dhaka against the live knowledge
+base, via `scripts/benchmark_latency.py`:
+
 | | |
 |---|---|
-| Duration | **119–293s** across measured runs; 178s on the most recent full UI run |
-| Cost | **$0.0020–0.0032** per analysis, read from OpenRouter's usage accounting |
-| Models | vision `qwen/qwen3.7-flash`, reasoning `openai/gpt-oss-120b`, embeddings `baai/bge-m3` |
+| Duration | **p50 18.6s, p90 20.7s, slowest 21.4s** — 20 of 20 inside the 60s target |
+| Completion | **20 of 20**, zero retries across 100 model calls |
+| Cost | **$0.0066** per analysis, read from OpenRouter's usage accounting |
+| Models | vision `google/gemini-2.5-flash-lite`, reasoning `openai/gpt-oss-120b`, embeddings `baai/bge-m3` |
 
-The PRD targets 60s. We are not there. The largest single component is network
-latency: a trivial query from Dhaka to the London database takes **431ms**, and
-the pipeline makes many. Deploying to Railway's London region removes that
-component without touching the code.
+Per stage at p50: evidence 5.4s, retrieval 2.3s, specialists 4.8s (three in
+parallel), synthesis 5.0s.
+
+### How it got there, and what to do if it regresses
+
+It was **p50 195s, p90 263s, and 6 of 8 completing** as recently as the same
+day. Three things account for the whole difference, and any of them can undo it.
+
+**Provider routing is the big one.** OpenRouter sorts by **price** unless told
+otherwise. One model id is not one service: `openai/gpt-oss-120b` is served by
+twenty endpoints measured between **18 and 940 tokens/second**, and the three
+cheapest — the ones price-sorting always picks — run at 25, 21 and 18. That is
+why the same analysis took 119s one run and 360s the next with identical token
+counts. `provider.sort = "throughput"` under a price ceiling fixed it;
+specialists went from 71s to 5s and synthesis from 41s to 5s. The ceiling
+(`provider_max_price_*` in `Settings`) is what keeps cost bounded — remove it
+and requests go to Cerebras at ten times the price.
+
+**The vision model must have more than one provider.** `qwen/qwen3.7-flash` was
+served by a single endpoint at 24 tok/s, so no routing could help it and it
+ignored `reasoning_effort` entirely. It cost 44s per analysis on its own.
+`gemini-2.5-flash-lite` does the same work in 6s. Any replacement needs to
+support **structured outputs**, or the strict-schema request will find no
+eligible provider and fail with a 404 rather than falling back.
+
+**Retries were invisible and expensive.** The vision stage was silently retrying
+on four images in six, doubling evidence extraction from ~35s to 73–94s, because
+the model answered `signage_legible` with what the sign *said* rather than
+true/false. See §7.
+
+If latency regresses, run the harness before changing anything — it reports
+which provider served each call, which is almost always the answer.
+
+The Dhaka-to-London round trip is **not** a significant factor, despite what an
+earlier version of this document and a comment in `config.py` both claimed:
+retrieval is 2.3s of an 18.6s run. Deploying in London is worth a second or two,
+not sixty.
 
 ### Citations are enforced, not requested
 
@@ -276,6 +313,23 @@ Conflating them wastes a lot of debugging.
 **`str(TimeoutError())` is the empty string.** Recording it as an error detail
 writes a blank reason and shows the user a failure with no explanation.
 
+**A schema mismatch costs a whole call, so coerce where the answer is right.**
+Asked whether signage was legible, the vision model replied `"Magnolia"`,
+`"Yes ('THE SHOPPE' on the back wall)"` and `["MAGNOLIA JOURNAL", "ELEVATOR"]` —
+every one of them a *more* informative answer to a badly posed question. Strict
+validation rejected all three and retried the most expensive call in the
+pipeline, on four benchmark images in six. `VisualEvidence` now coerces the
+descriptive forms: reading a sign is itself proof it was legible. Prefer that to
+a retry whenever the model has clearly understood and merely mis-shaped.
+
+**Watch for escape clauses in prompts — the model will take them.** The
+specialist prompt said "produce between 3 and 5 items, fewer is acceptable if
+the evidence genuinely does not support more", and a perspective duly came back
+with one item. This is the second time this exact pattern has bitten: an earlier
+citation instruction ended "if no listed rule supports a point, return an empty
+array", and the model returned empty arrays every time. If a floor matters,
+state it as a floor.
+
 ---
 
 ## 8. Deployment (not yet done)
@@ -304,16 +358,24 @@ Against the environment you intend to demonstrate:
 7. Submit feedback; confirm the row lands against the right analysis and tenant.
 8. **Isolation:** authenticate as tenant B and request tenant A's analysis id and
    storage object directly. Both must fail server-side, not merely be hidden.
-9. Run the benchmark set in `data/benchmark/` (20 real display photographs) and
-   confirm at least 90% complete.
+9. Run the benchmark set and confirm at least 90% complete and p90 inside 60s:
+
+   ```bash
+   .venv/bin/python scripts/benchmark_latency.py --limit 20 --label <name>
+   .venv/bin/python scripts/benchmark_latency.py --compare final <name>
+   ```
+
+   The harness runs the real graph against the live knowledge base without
+   writing analysis rows, and reports per-stage timings, the provider that
+   served each call, retry counts and cost. Runs are kept in
+   `data/benchmark-runs/`, so `--compare` works across days. Change one thing
+   at a time and re-measure; bundled changes cannot be attributed.
 
 ---
 
 ## 10. Known gaps
 
-- **Latency** is 119s against a 60s target. See §6.
 - **Not deployed.** Everything above runs locally against the live database.
-- **Brand context screen** (PRD 2A) is not built; the API endpoint exists.
 - **Coverage is uneven by domain.** Commercial has a mature bespoke corpus;
   Creative VM and Retail Psychology are thinner, so Commercial output reads
   sharper. That is a property of the source material, not a pipeline fault —

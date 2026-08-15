@@ -137,3 +137,50 @@ def test_real_corpus_fixtures_are_accepted():
             rejected.append((path.name, str(exc)))
 
     assert not rejected, f"real display artwork was rejected: {rejected}"
+
+
+# --- descriptive answers where a boolean was asked for ----------------------
+#
+# From a real benchmark run: asked whether signage was legible, the vision model
+# replied "Magnolia" and "Yes ('THE SHOPPE' on the back wall)". Pydantic rejected
+# both, which retried the single most expensive call in the pipeline -- four
+# images in six, taking evidence extraction from ~35s to 73-94s.
+
+from vmlab.graph.schemas import VisualEvidence  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("Magnolia", True),
+        ("Yes ('THE SHOPPE' on the back wall)", True),
+        ("MAGNOLIA (on book and cover)", True),
+        ("yes", True),
+        ("no signage visible", False),
+        ("Not legible", False),
+        ("illegible", False),
+        ("unknown", None),
+        ("", None),
+    ],
+)
+def test_a_described_sign_is_read_as_legible(value, expected):
+    # Reading the sign is itself proof it was legible, so a description counts
+    # as yes unless it is phrased as a negative.
+    assert VisualEvidence(display_type="window", signage_legible=value).signage_legible is expected
+
+
+def test_real_booleans_are_untouched():
+    evidence = VisualEvidence(display_type="window", signage_legible=True, price_visible=False)
+    assert evidence.signage_legible is True
+    assert evidence.price_visible is False
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("approximately 12", 12), ("~8 SKUs", 8), ("3", 3), ("several", None)],
+)
+def test_hedged_counts_keep_their_number_or_admit_none(value, expected):
+    # "several" carries no number; None records that honestly rather than
+    # inventing a figure that would then be reasoned over as fact.
+    evidence = VisualEvidence(display_type="window", approximate_sku_count=value)
+    assert evidence.approximate_sku_count == expected

@@ -1,0 +1,300 @@
+{
+  "label": "effort-default",
+  "recorded_at": "2026-08-15T17:51:44",
+  "config": {
+    "vision_model": "google/gemini-2.5-flash-lite",
+    "reasoning_model": "openai/gpt-oss-120b",
+    "image_long_edge_px": 1600,
+    "retrieval_top_k": 8
+  },
+  "summary": {
+    "images": 8,
+    "completed": 8,
+    "completion_rate": 100.0,
+    "p50_s": 17.6,
+    "p90_s": 18.6,
+    "max_s": 19.0,
+    "mean_cost_usd": 0.006588,
+    "under_60s": 8,
+    "p50_evidence_s": 5.9,
+    "p50_retrieval_s": 2.5,
+    "p50_specialists_s": 4.9,
+    "p50_synthesis_s": 4.5,
+    "total_attempts": 40,
+    "retried_stages": 0
+  },
+  "runs": [
+    {
+      "image": "1.png",
+      "ok": true,
+      "total_s": 19.0,
+      "evidence_s": 6.5,
+      "retrieval_s": 3.8,
+      "specialists_s": 4.3,
+      "synthesis_s": 4.5,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "google/gemini-2.5-flash-lite via Google",
+        "commercial": "openai/gpt-oss-120b via Groq",
+        "creative_vm": "openai/gpt-oss-120b via Groq",
+        "retail_psychology": "openai/gpt-oss-120b via Groq",
+        "synthesis": "openai/gpt-oss-120b via Groq"
+      },
+      "cost_usd": 0.006267,
+      "prompt_tokens": 15389,
+      "completion_tokens": 7113,
+      "items_per_perspective": {
+        "commercial": 5,
+        "creative_vm": 4,
+        "retail_psychology": 4
+      },
+      "citations": 30,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "10.png",
+      "ok": true,
+      "total_s": 17.7,
+      "evidence_s": 6.4,
+      "retrieval_s": 1.7,
+      "specialists_s": 5.6,
+      "synthesis_s": 4.1,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "google/gemini-2.5-flash-lite via Google",
+        "commercial": "openai/gpt-oss-120b via Groq",
+        "creative_vm": "openai/gpt-oss-120b via Groq",
+        "retail_psychology": "openai/gpt-oss-120b via Groq",
+        "synthesis": "openai/gpt-oss-120b via Groq"
+      },
+      "cost_usd": 0.007543,
+      "prompt_tokens": 16863,
+      "completion_tokens": 8847,
+      "items_per_perspective": {
+        "commercial": 4,
+        "creative_vm": 4,
+        "retail_psychology": 5
+      },
+      "citations": 38,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "12.png",
+      "ok": true,
+      "total_s": 18.6,
+      "evidence_s": 6.3,
+      "retrieval_s": 3.3,
+      "specialists_s": 4.5,
+      "synthesis_s": 4.4,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "google/gemini-2.5-flash-lite via Google",
+        "commercial": "openai/gpt-oss-120b via Groq",
+        "creative_vm": "openai/gpt-oss-120b via Groq",
+        "retail_psychology": "openai/gpt-oss-120b via Groq",
+        "synthesis": "openai/gpt-oss-120b via Groq"
+      },
+      "cost_usd": 0.006881,
+      "prompt_tokens": 15418,
+      "completion_tokens": 8104,
+      "items_per_perspective": {
+        "commercial": 5,
+        "creative_vm": 5,
+        "retail_psychology": 4
+      },
+      "citations": 41,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "13.png",
+      "ok": true,
+      "total_s": 16.4,
+      "evidence_s": 5.0,
+      "retrieval_s": 1.7,
+      "specialists_s": 4.9,
+      "synthesis_s": 4.9,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "google/gemini-2.5-flash-lite via Google",
+        "commercial": "openai/gpt-oss-120b via Groq",
+        "creative_vm": "openai/gpt-oss-120b via Groq",
+        "retail_psychology": "openai/gpt-oss-120b via Groq",
+        "synthesis": "openai/gpt-oss-120b via Groq"
+      },
+      "cost_usd": 0.006902,
+      "prompt_tokens": 16678,
+      "completion_tokens": 7980,
+      "items_per_perspective": {
+        "commercial": 4,
+        "creative_vm": 4,
+        "retail_psychology": 5
+      },
+      "citations": 48,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "14.png",
+      "ok": true,
+      "total_s": 17.6,
+      "evidence_s": 4.5,
+      "retrieval_s": 2.6,
+      "specialists_s": 5.4,
+      "synthesis_s": 5.1,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "google/gemini-2.5-flash-lite via Google",
+        "commercial": "openai/gpt-oss-120b via Groq",
+        "creative_vm": "openai/gpt-oss-120b via Groq",
+        "retail_psychology": "openai/gpt-oss-120b via Groq",
+        "synthesis": "openai/gpt-oss-120b via Groq"
+      },
+      "cost_usd": 0.006494,
+      "prompt_tokens": 15328,
+      "completion_tokens": 7548,
+      "items_per_perspective": {
+        "commercial": 4,
+        "creative_vm": 4,
+        "retail_psychology": 5
+      },
+      "citations": 42,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "15.png",
+      "ok": true,
+      "total_s": 16.0,
+      "evidence_s": 5.9,
+      "retrieval_s": 2.0,
+      "specialists_s": 4.0,
+      "synthesis_s": 4.0,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "google/gemini-2.5-flash-lite via Google",
+        "commercial": "openai/gpt-oss-120b via Groq",
+        "creative_vm": "openai/gpt-oss-120b via Groq",
+        "retail_psychology": "openai/gpt-oss-120b via Groq",
+        "synthesis": "openai/gpt-oss-120b via Groq"
+      },
+      "cost_usd": 0.006005,
+      "prompt_tokens": 14935,
+      "completion_tokens": 6749,
+      "items_per_perspective": {
+        "commercial": 4,
+        "creative_vm": 4,
+        "retail_psychology": 4
+      },
+      "citations": 34,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "16.png",
+      "ok": true,
+      "total_s": 16.4,
+      "evidence_s": 5.3,
+      "retrieval_s": 1.9,
+      "specialists_s": 5.2,
+      "synthesis_s": 4.0,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "google/gemini-2.5-flash-lite via Google",
+        "commercial": "openai/gpt-oss-120b via Groq",
+        "creative_vm": "openai/gpt-oss-120b via Groq",
+        "retail_psychology": "openai/gpt-oss-120b via Groq",
+        "synthesis": "openai/gpt-oss-120b via Groq"
+      },
+      "cost_usd": 0.006039,
+      "prompt_tokens": 15125,
+      "completion_tokens": 6967,
+      "items_per_perspective": {
+        "commercial": 4,
+        "creative_vm": 4,
+        "retail_psychology": 4
+      },
+      "citations": 40,
+      "actions": 3,
+      "errors": []
+    },
+    {
+      "image": "17.png",
+      "ok": true,
+      "total_s": 17.0,
+      "evidence_s": 5.2,
+      "retrieval_s": 2.5,
+      "specialists_s": 4.6,
+      "synthesis_s": 4.7,
+      "attempts": {
+        "vision": 1,
+        "commercial": 1,
+        "creative_vm": 1,
+        "retail_psychology": 1,
+        "synthesis": 1
+      },
+      "providers": {
+        "vision": "google/gemini-2.5-flash-lite via Google",
+        "commercial": "openai/gpt-oss-120b via Groq",
+        "creative_vm": "openai/gpt-oss-120b via Groq",
+        "retail_psychology": "openai/gpt-oss-120b via Groq",
+        "synthesis": "openai/gpt-oss-120b via Groq"
+      },
+      "cost_usd": 0.006573,
+      "prompt_tokens": 15040,
+      "completion_tokens": 7691,
+      "items_per_perspective": {
+        "commercial": 4,
+        "creative_vm": 4,
+        "retail_psychology": 4
+      },
+      "citations": 31,
+      "actions": 3,
+      "errors": []
+    }
+  ]
+}

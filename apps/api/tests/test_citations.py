@@ -9,6 +9,7 @@ of returning the {"items": [...]} envelope.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 
@@ -210,3 +211,56 @@ def test_retry_instruction_names_the_right_schema():
     assert '"overall_summary"' in synthesis_keys
     assert '"actions"' in synthesis_keys
     assert '"items"' not in synthesis_keys
+
+
+# --- the three-item floor ---------------------------------------------------
+#
+# FR-07/08/09 require three to five items per perspective. On the benchmark set
+# one specialist returned a single item, because the prompt used to say "fewer
+# is acceptable" and the model took that exit -- the same way an earlier version
+# took the exit offered on citations.
+
+
+def test_the_envelope_rejects_a_thin_response():
+    from pydantic import ValidationError
+
+    from vmlab.graph.nodes.reasoning import SpecialistItems
+
+    with pytest.raises(ValidationError):
+        SpecialistItems.model_validate({"items": [item([]).model_dump()] * 2})
+
+    # Three is fine.
+    assert len(SpecialistItems.model_validate({"items": [item([]).model_dump()] * 3}).items) == 3
+
+
+def test_a_short_answer_is_salvaged_rather_than_dropped():
+    # Two grounded findings beat a missing perspective. The floor drives a
+    # retry; this is what happens when the retry does not help either.
+    from vmlab.graph.nodes.reasoning import CallOutcome, _salvage_items
+    from vmlab.models.openrouter import Completion
+
+    payload = json.dumps({"items": [item(["PPS-001"]).model_dump(), item([]).model_dump()]})
+    outcome = CallOutcome(completion=Completion(text=payload, model="m"), attempts=3)
+
+    salvaged = _salvage_items(outcome)
+
+    assert len(salvaged) == 2
+
+
+def test_salvage_skips_items_that_are_themselves_invalid():
+    from vmlab.graph.nodes.reasoning import CallOutcome, _salvage_items
+    from vmlab.models.openrouter import Completion
+
+    payload = json.dumps({"items": [item([]).model_dump(), {"observation": "incomplete"}]})
+    outcome = CallOutcome(completion=Completion(text=payload, model="m"), attempts=3)
+
+    assert len(_salvage_items(outcome)) == 1
+
+
+def test_salvage_returns_nothing_when_there_is_nothing_to_salvage():
+    from vmlab.graph.nodes.reasoning import CallOutcome, _salvage_items
+    from vmlab.models.openrouter import Completion
+
+    assert _salvage_items(None) == []
+    assert _salvage_items(CallOutcome(completion=None)) == []
+    assert _salvage_items(CallOutcome(completion=Completion(text="not json", model="m"))) == []

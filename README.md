@@ -13,8 +13,9 @@ apps/api/        FastAPI backend, LangGraph pipeline, retrieval, ingestion
 apps/web/        Next.js frontend (mobile-first)
 db/migrations/   Schema, RLS policies, pgvector
 db/test/         Migration runner and the tenant isolation suite
-scripts/         Corpus splitting, ingestion, model preflight
-docs/            Open dependencies and handover notes
+scripts/         Corpus splitting, ingestion, model preflight, latency benchmark
+docs/            Handover notes
+data/benchmark/  20 real display photographs, the acceptance set
 ```
 
 ## Running it
@@ -57,7 +58,7 @@ the repo root.
 ## Tests
 
 ```bash
-cd apps/api && ../../.venv/bin/python -m pytest -q    # 61 tests
+cd apps/api && ../../.venv/bin/python -m pytest -q    # 95 tests
 cd apps/web && npm run typecheck && npx next build
 ./db/test/run.sh                                      # SQL-level isolation assertions
 ```
@@ -80,9 +81,21 @@ untrustworthy.
 .venv/bin/python scripts/ingest_kb.py           # embed and write; idempotent per document
 ```
 
-The live corpus is **62 documents, 4,771 chunks**. Run it after any change to chunking and compare — a swing in
-chunk count means the rule-block handling has broken, which is far cheaper to
-catch there than in retrieval results.
+The live corpus is **62 documents, 4,771 chunks**. Re-run the dry run after any
+change to chunking and compare the count — a swing means the rule-block handling
+has broken, which is far cheaper to catch there than in retrieval results.
+
+## Measuring latency
+
+```bash
+.venv/bin/python scripts/benchmark_latency.py --limit 20 --label mychange
+.venv/bin/python scripts/benchmark_latency.py --compare final mychange
+```
+
+Runs the real pipeline over `data/benchmark/` without writing analysis rows, and
+records per-stage timings, **which provider served each call**, retry counts and
+cost to `data/benchmark-runs/`. Change one thing at a time: bundled changes
+cannot be attributed, and provider choice alone moved p50 from 195s to 50s.
 
 ## Design decisions worth knowing
 
@@ -108,9 +121,10 @@ A two-perspective analysis that looks complete is worse than an error.
 ## Status
 
 All seven Month-1 acceptance criteria pass end to end against the live Supabase
-project, verified in a browser. Measured 119–293s and $0.0020–0.0032 per
-analysis; the PRD's 60s target is not met and is recorded as a known gap.
+project. Measured over all twenty benchmark photographs: **p50 18.6s, p90 20.7s,
+20 of 20 inside the PRD's 60-second target**, at $0.0066 per analysis. It was
+p50 195s before the latency work; `docs/HANDOVER.md` §6 explains what moved and
+what would undo it.
 
 Not yet deployed, and sign-in needs real SMTP configured before anyone outside
-the team can log in. Full detail, including every operational trap worth
-knowing, is in `docs/HANDOVER.md`.
+the team can log in.

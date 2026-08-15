@@ -11,13 +11,14 @@ looking like a complete result.
 from __future__ import annotations
 
 import base64
-import json
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from vmlab.config import get_settings
 from vmlab.graph import prompts
@@ -29,7 +30,12 @@ from vmlab.graph.schemas import (
     VisualEvidence,
 )
 from vmlab.graph.state import AnalysisState
-from vmlab.models.openrouter import Completion, OpenRouterClient, OpenRouterError
+from vmlab.models.openrouter import (
+    Completion,
+    OpenRouterClient,
+    OpenRouterError,
+    strict_schema,
+)
 from vmlab.retrieval.retriever import RetrievedChunk
 
 logger = logging.getLogger(__name__)
@@ -48,7 +54,11 @@ class SpecialistItems(BaseModel):
     than a bare top-level array, so the envelope is asked for and unwrapped here.
     """
 
-    items: list[SpecialistItem]
+    # FR-07/08/09 require three to five. Asking pydantic to enforce the floor is
+    # what turns a thin answer into a retry instead of into a section the client
+    # can see is short. Retries cost about four seconds now, so the floor is
+    # affordable in a way it was not when a specialist took seventy.
+    items: list[SpecialistItem] = Field(min_length=3)
 
 
 # Keys a model plausibly uses for the items array when it ignores the envelope.
@@ -100,6 +110,75 @@ def _top_level_keys(schema: type) -> str:
     return ", ".join(f'"{name}"' for name in fields)
 
 
+@dataclass
+class CallOutcome:
+    """What a validated call cost in total, not just on the attempt that worked.
+
+    An earlier version returned only the successful `Completion`, so every retry
+    a stage burned was invisible: its tokens and its cost vanished from the
+    per-analysis figure reported to the client, and a stage that quietly cost
+    three calls looked identical to one that cost a single call. Since a retry is
+    a whole duplicate request, that is also where the latency hides.
+    """
+
+    completion: Completion | None
+    attempts: int = 0
+    cost_usd: float = 0.0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+
+    def record(self, completion: Completion) -> None:
+        self.completion = completion
+        self.attempts += 1
+        self.cost_usd += completion.cost_usd
+        self.prompt_tokens += completion.prompt_tokens
+        self.completion_tokens += completion.completion_tokens
+
+    def telemetry(self, stage: str) -> dict[str, Any]:
+        """The observability half of a node's return value."""
+        model = self.completion.model if self.completion else "unknown"
+        provider = self.completion.provider if self.completion else ""
+        return {
+            # "model via Provider" rather than the bare model id: one id is
+            # served by many upstreams at wildly different speeds, so the
+            # provider is the part that explains a slow run.
+            "model_versions": {stage: f"{model} via {provider}" if provider else model},
+            "stage_attempts": {stage: self.attempts},
+            "cost_usd": self.cost_usd,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+        }
+
+
+class SchemaCallFailed(OpenRouterError):
+    """Validation failed on every attempt, carrying what those attempts cost."""
+
+    def __init__(self, message: str, outcome: CallOutcome) -> None:
+        super().__init__(message)
+        self.outcome = outcome
+
+
+def _reasoning_for(effort: str) -> dict[str, Any] | None:
+    """Translate the configured effort into OpenRouter's reasoning parameter.
+
+    An empty setting means "leave the model at its own default", which is not
+    the same as low -- so it sends nothing rather than a value.
+    """
+    return {"effort": effort} if effort else None
+
+
+@lru_cache(maxsize=8)
+def _schema_for(schema: type) -> dict[str, Any] | None:
+    """The strict structured-output schema for a pydantic model, built once.
+
+    Returns None when strict schemas are switched off, which falls the caller
+    back to asking for a JSON object and validating afterwards.
+    """
+    if not get_settings().use_strict_schemas:
+        return None
+    return strict_schema(schema.model_json_schema())
+
+
 async def _call_json(
     client: OpenRouterClient,
     *,
@@ -110,14 +189,23 @@ async def _call_json(
     attempts: int = 3,
     coerce: Callable[[Any], Any] | None = None,
     retry_reminder: str = "",
-) -> tuple[Any, Completion]:
+    reasoning: dict[str, Any] | None = None,
+    strict: bool = True,
+) -> tuple[Any, CallOutcome]:
     """Call the model and validate the response, retrying on bad shape.
 
     `coerce` gets a chance to repair a near-miss payload before validation, so
     a recoverable shape error does not consume an attempt.
+
+    With strict schemas enabled the provider's decoder guarantees the shape and
+    the retry loop should never run. It stays because the guarantee covers
+    structure, not semantics: pydantic still enforces the bounds and the
+    `Observed only` rule that strict mode cannot express.
     """
     last_error: Exception | None = None
     base_messages = messages
+    outcome = CallOutcome(completion=None)
+    json_schema = _schema_for(schema) if strict else None
 
     for attempt in range(attempts):
         completion = await client.complete(
@@ -125,15 +213,19 @@ async def _call_json(
             messages=messages,
             max_tokens=max_tokens,
             json_object=True,
+            json_schema=json_schema,
+            schema_name=schema.__name__.lower(),
+            reasoning=reasoning,
             # A retry at the same temperature tends to reproduce the same
             # malformed output, so nudge it up.
             temperature=0.2 if attempt == 0 else 0.5,
         )
+        outcome.record(completion)
         try:
             payload = completion.as_json()
             if coerce is not None:
                 payload = coerce(payload)
-            return schema.model_validate(payload), completion
+            return schema.model_validate(payload), outcome
         except (ValidationError, OpenRouterError) as exc:
             last_error = exc
             logger.warning("schema validation failed on attempt %d: %s", attempt + 1, exc)
@@ -154,7 +246,37 @@ async def _call_json(
                 },
             ]
 
-    raise OpenRouterError(f"model failed schema validation after {attempts} attempts: {last_error}")
+    raise SchemaCallFailed(
+        f"model failed schema validation after {attempts} attempts: {last_error}", outcome
+    )
+
+
+def _salvage_items(outcome: CallOutcome | None) -> list[SpecialistItem]:
+    """Recover whatever valid items the last failed attempt did contain.
+
+    The envelope demands three items, so a specialist that can only find two
+    fails validation on every attempt and would otherwise be dropped entirely.
+    Two grounded findings are worth more to the reader than a missing
+    perspective, and far more than a retry loop that ends in nothing -- so the
+    floor drives a retry, and this is what happens when the retry does not help.
+    """
+    if outcome is None or outcome.completion is None:
+        return []
+    try:
+        payload = _coerce_items(outcome.completion.as_json())
+    except OpenRouterError:
+        return []
+    entries = payload.get("items") if isinstance(payload, dict) else None
+    if not isinstance(entries, list):
+        return []
+
+    salvaged: list[SpecialistItem] = []
+    for entry in entries:
+        try:
+            salvaged.append(SpecialistItem.model_validate(entry))
+        except ValidationError:
+            continue
+    return salvaged[:5]
 
 
 def _permitted_rule_ids(chunks: list[RetrievedChunk]) -> set[str]:
@@ -264,7 +386,7 @@ async def extract_evidence(state: AnalysisState, client: OpenRouterClient) -> di
     # fatal. The budget is deliberately generous: too low truncates the JSON
     # mid-object, which fails validation for a reason no retry can fix.
     try:
-        evidence, completion = await _call_json(
+        evidence, outcome = await _call_json(
             client,
             model=settings.vision_model,
             messages=messages,
@@ -283,10 +405,7 @@ async def extract_evidence(state: AnalysisState, client: OpenRouterClient) -> di
     return {
         "evidence": evidence,
         "stage_timings_ms": {"evidence": int((time.monotonic() - started) * 1000)},
-        "model_versions": {"vision": completion.model},
-        "cost_usd": completion.cost_usd,
-        "prompt_tokens": completion.prompt_tokens,
-        "completion_tokens": completion.completion_tokens,
+        **outcome.telemetry("vision"),
     }
 
 
@@ -351,23 +470,46 @@ async def run_specialist(
     ]
 
     try:
-        parsed, completion = await _call_json(
+        parsed, outcome = await _call_json(
             client,
             model=settings.reasoning_model,
             messages=messages,
             schema=SpecialistItems,
             coerce=_coerce_items,
+            reasoning=_reasoning_for(settings.reasoning_effort),
             # The retry message becomes the last thing the model reads, so the
             # citation rule has to travel with it or a retried specialist
             # silently returns no citations at all.
             retry_reminder=" " + citation_rule,
         )
     except OpenRouterError as exc:
-        # Degrade: two perspectives plus an honest note beats no result at all.
         logger.error("specialist %s failed: %s", perspective.value, exc)
+        # A failed specialist still spent whatever its attempts cost. Reporting
+        # zero there would understate the analysis by up to three calls.
+        spent = getattr(exc, "outcome", None)
+        timing = {perspective.value: int((time.monotonic() - started) * 1000)}
+        telemetry = spent.telemetry(perspective.value) if spent else {}
+
+        # Short of the three-item floor is not the same failure as unusable
+        # output. Keep what was grounded and record that it came up short.
+        salvaged = _salvage_items(spent)
+        if salvaged:
+            _enforce_citations(salvaged, permitted, perspective.value)
+            return {
+                "findings": [SpecialistFinding(perspective=perspective, items=salvaged)],
+                "errors": [
+                    f"{perspective.value} returned only {len(salvaged)} "
+                    f"{'item' if len(salvaged) == 1 else 'items'} against a floor of three"
+                ],
+                "stage_timings_ms": timing,
+                **telemetry,
+            }
+
+        # Degrade: two perspectives plus an honest note beats no result at all.
         return {
             "errors": [f"{perspective.value} specialist did not complete: {exc}"],
-            "stage_timings_ms": {perspective.value: int((time.monotonic() - started) * 1000)},
+            "stage_timings_ms": timing,
+            **telemetry,
         }
 
     _enforce_citations(parsed.items, permitted, perspective.value)
@@ -375,10 +517,7 @@ async def run_specialist(
     return {
         "findings": [finding],
         "stage_timings_ms": {perspective.value: int((time.monotonic() - started) * 1000)},
-        "model_versions": {perspective.value: completion.model},
-        "cost_usd": completion.cost_usd,
-        "prompt_tokens": completion.prompt_tokens,
-        "completion_tokens": completion.completion_tokens,
+        **outcome.telemetry(perspective.value),
     }
 
 
@@ -407,12 +546,13 @@ async def synthesise(state: AnalysisState, client: OpenRouterClient) -> dict:
         },
     ]
 
-    parsed, completion = await _call_json(
+    parsed, outcome = await _call_json(
         client,
         model=settings.reasoning_model,
         messages=messages,
         schema=Synthesis,
         max_tokens=3000,
+        reasoning=_reasoning_for(settings.reasoning_effort),
     )
 
     # Synthesis may only carry citations forward, never introduce new ones: the
@@ -440,9 +580,6 @@ async def synthesise(state: AnalysisState, client: OpenRouterClient) -> dict:
     return {
         "synthesis": parsed,
         "stage_timings_ms": {"synthesis": int((time.monotonic() - started) * 1000)},
-        "model_versions": {"synthesis": completion.model},
-        "cost_usd": completion.cost_usd,
-        "prompt_tokens": completion.prompt_tokens,
-        "completion_tokens": completion.completion_tokens,
+        **outcome.telemetry("synthesis"),
     }
 

@@ -24,11 +24,11 @@ const STAGES: { key: Analysis["status"]; label: string }[] = [
 ];
 
 const POLL_MS = 2000;
-// Generous on purpose. A measured run against the live knowledge base took
-// 237s, so the old 60s-era ceiling would have declared a healthy analysis dead.
-// The server marks its own stalled rows failed, so this is only a backstop for
-// the case where polling itself cannot reach it.
-const GIVE_UP_MS = 600_000;
+// Measured runs finish in 11-21s, and the server abandons its own analyses at
+// 120s. This only has to outlast that, and exists for the case where polling
+// cannot reach the server at all rather than for a slow analysis. It was ten
+// minutes when a run could genuinely take six.
+const GIVE_UP_MS = 180_000;
 
 export default function AnalysisPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);

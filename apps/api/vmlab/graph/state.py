@@ -44,6 +44,10 @@ class AnalysisState(TypedDict, total=False):
 
     # --- observability -----------------------------------------------------
     stage_timings_ms: Annotated[dict[str, int], merge_dicts]
+    # How many model calls each stage actually took. A stage that needed three
+    # attempts paid three times over in latency, and without this the only
+    # symptom is a slow run with no explanation.
+    stage_attempts: Annotated[dict[str, int], merge_dicts]
     model_versions: Annotated[dict[str, str], merge_dicts]
     cost_usd: Annotated[float, operator.add]
     prompt_tokens: Annotated[int, operator.add]

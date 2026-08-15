@@ -75,8 +75,11 @@ a knowledge base excerpt carries a rule identifier (for example PCE-014 or
 PPS-032), cite it in supporting_rule_ids for the item it supports.
 
 Rules:
-- Produce between 3 and 5 items. Fewer is acceptable if the evidence genuinely
-  does not support more; padding with generic retail advice is not.
+- Produce between 3 and 5 items. Three is a floor, not a target: a display
+  always affords at least three observations from your perspective, even if
+  some are minor or provisional. Lower the confidence on a weaker item and say
+  what is missing, rather than omitting it. Padding with generic retail advice
+  that is not grounded in the evidence or the excerpts is still not acceptable.
 - Stay inside your perspective. Another specialist covers the others.
 - Never state a percentage, sales figure or uplift as fact. You have no such data.
 - Where evidence is thin, lower confidence and say what is missing.
