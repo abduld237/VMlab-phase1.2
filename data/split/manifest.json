@@ -160,28 +160,12 @@
       "DIG"
     ],
     "version": "1.0",
-    "validity_status": "superseded",
+    "validity_status": "active",
     "authority": "canonical",
     "source_bundle": "bundle_01_16",
-    "source_pages": "23-51",
-    "page_count": 29,
-    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-11_superseded.pdf"
-  },
-  {
-    "document_id": "VMLAB-KB-12",
-    "doc_number": "12",
-    "title": "Product Presentation Standards",
-    "domain": "creative_vm",
-    "rule_prefixes": [
-      "PPS"
-    ],
-    "version": "1.0",
-    "validity_status": "superseded",
-    "authority": "canonical",
-    "source_bundle": "bundle_01_16",
-    "source_pages": "52-95",
-    "page_count": 44,
-    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-12_superseded.pdf"
+    "source_pages": "96-155",
+    "page_count": 60,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-11.pdf"
   },
   {
     "document_id": "VMLAB-KB-11",
@@ -203,13 +187,13 @@
       "MEA",
       "DIG"
     ],
-    "version": "1.0",
-    "validity_status": "active",
+    "version": "1.0-prior1",
+    "validity_status": "superseded",
     "authority": "canonical",
     "source_bundle": "bundle_01_16",
-    "source_pages": "96-155",
-    "page_count": 60,
-    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-11.pdf"
+    "source_pages": "23-51",
+    "page_count": 29,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-11_superseded.pdf"
   },
   {
     "document_id": "VMLAB-KB-12",
@@ -226,6 +210,38 @@
     "source_pages": "156-233",
     "page_count": 78,
     "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-12.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-12",
+    "doc_number": "12",
+    "title": "Product Presentation Standards",
+    "domain": "creative_vm",
+    "rule_prefixes": [
+      "PPS"
+    ],
+    "version": "1.0",
+    "validity_status": "superseded",
+    "authority": "canonical",
+    "source_bundle": "bundle_01_16",
+    "source_pages": "52-95",
+    "page_count": 44,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-12_superseded.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-13",
+    "doc_number": "13",
+    "title": "Hero Products & Commercial Prioritisation",
+    "domain": "commercial",
+    "rule_prefixes": [
+      "HCP"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "supplied_2026_08_14",
+    "source_pages": "1-2",
+    "page_count": 2,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-13.pdf"
   },
   {
     "document_id": "VMLAB-KB-14A.1",
@@ -272,6 +288,22 @@
     "source_pages": "302-341",
     "page_count": 40,
     "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-14A.3.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-15",
+    "doc_number": "15",
+    "title": "Product Collections & Storytelling",
+    "domain": "creative_vm",
+    "rule_prefixes": [
+      "PCS"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "supplied_2026_08_14",
+    "source_pages": "1-34",
+    "page_count": 34,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-15.pdf"
   },
   {
     "document_id": "VMLAB-KB-16",
@@ -433,6 +465,23 @@
     "source_pages": "339-372",
     "page_count": 34,
     "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-27.pdf"
+  },
+  {
+    "document_id": "VMLAB-KB-28",
+    "doc_number": "28",
+    "title": "Retail Scenarios & Worked Commercial Examples",
+    "domain": "commercial",
+    "rule_prefixes": [
+      "CDF",
+      "RCE"
+    ],
+    "version": "1.0",
+    "validity_status": "active",
+    "authority": "canonical",
+    "source_bundle": "supplied_2026_08_14",
+    "source_pages": "1-89",
+    "page_count": 89,
+    "path": "/home/remon/Documents/client/vmlab-phase1/data/split/VMLAB-KB-28.pdf"
   },
   {
     "document_id": "VMLAB-KB-29",

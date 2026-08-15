@@ -32,6 +32,11 @@ AUTHORITY_RANK = {"canonical": 0, "guidance": 1, "illustrative": 2, "historical"
 # At most this share of a bundle may come from illustrative sources.
 MAX_ILLUSTRATIVE_FRACTION = 0.25
 
+# Share of each result set reserved for canonical chunks that actually carry
+# rule ids. Enough that a specialist has something citable; small enough that
+# similarity still decides most of what it reads.
+RULE_BEARING_FRACTION = 0.375
+
 
 @dataclass
 class RetrievedChunk:
@@ -75,7 +80,11 @@ with candidates as (
         row_number() over (
             partition by c.authority
             order by c.embedding <=> %(embedding)s::vector
-        ) as tier_rank
+        ) as tier_rank,
+        row_number() over (
+            partition by (cardinality(c.rule_ids) > 0)
+            order by c.embedding <=> %(embedding)s::vector
+        ) as rule_rank
     from public.kb_chunks c
     join public.kb_documents d on d.id = c.kb_document_id
     where c.domain = %(domain)s
@@ -85,10 +94,51 @@ with candidates as (
           c.scope = 'universal'
           or (c.scope = 'tenant' and c.tenant_id = %(tenant_id)s)
       )
+),
+-- Fewer than a fifth of canonical chunks carry rule ids: the standards split
+-- between narrative sections and the rule tables that codify them, and the
+-- narrative reads as more similar to a photograph's description. Similarity
+-- therefore returns eight canonical chunks with nothing citable, which is
+-- exactly what produced three perspectives and zero citations on a live run.
+-- Reserving a few slots for the nearest rule-bearing chunks keeps the client's
+-- own rule ids reachable without displacing the best matches wholesale.
+reserved as (
+    select * from candidates
+    where cardinality(rule_ids) > 0
+      and authority = 'canonical'
+      and rule_rank <= %(rule_quota)s
+),
+general as (
+    select *,
+        row_number() over (
+            order by
+                case authority
+                    when 'canonical' then 0
+                    when 'guidance' then 1
+                    when 'illustrative' then 2
+                    else 3
+                end,
+                distance
+        ) as general_rank
+    from candidates
+    where (authority <> 'illustrative' or tier_rank <= %(illustrative_cap)s)
+      and id not in (select id from reserved)
 )
-select *
-from candidates
-where authority <> 'illustrative' or tier_rank <= %(illustrative_cap)s
+-- The reserved rows have to be taken out of the budget before the rest compete,
+-- not merged and re-sorted with them. Sorting the union by distance and then
+-- applying the limit let a whole domain's rule-bearing chunks fall off the end
+-- whenever they sat further away than eight narrative ones -- which is why
+-- retail psychology kept coming back with nothing citable.
+select * from (
+    select id, document_id, title, domain, authority, content, section_path,
+           page, rule_ids, distance
+    from reserved
+    union all
+    select id, document_id, title, domain, authority, content, section_path,
+           page, rule_ids, distance
+    from general
+    where general_rank <= %(limit)s - (select count(*) from reserved)
+) merged
 order by
     case authority
         when 'canonical' then 0
@@ -97,7 +147,6 @@ order by
         else 3
     end,
     distance
-limit %(limit)s
 """
 
 
@@ -119,6 +168,7 @@ class Retriever:
         always eligible. Passing None restricts the search to universal content.
         """
         illustrative_cap = max(1, int(top_k * MAX_ILLUSTRATIVE_FRACTION))
+        rule_quota = max(1, int(top_k * RULE_BEARING_FRACTION))
 
         async with self.connection.cursor(row_factory=dict_row) as cursor:
             await cursor.execute(
@@ -128,6 +178,7 @@ class Retriever:
                     "domain": domain,
                     "tenant_id": tenant_id,
                     "illustrative_cap": illustrative_cap,
+                    "rule_quota": rule_quota,
                     "limit": top_k,
                 },
             )

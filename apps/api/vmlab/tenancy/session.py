@@ -42,10 +42,39 @@ async def open_pool() -> AsyncConnectionPool:
             min_size=1,
             max_size=10,
             open=False,
+            # Without these a dropped connection is invisible: the pooler goes
+            # away, the local socket stays ESTABLISHED forever, and the next
+            # query -- or even the pool's own liveness check -- waits on a reply
+            # that will never arrive. TCP keepalives make the kernel notice, and
+            # tcp_user_timeout bounds how long an unacknowledged send can hang.
+            # Keep it well above the slowest legitimate write: at 30s it killed
+            # a 1.5MB vector insert mid-flight over a high-latency link, which
+            # looks exactly like the dead-socket hang it was added to prevent.
+            # Diagnosed from an ingestion stuck 33 minutes with 3.5KB unread on
+            # a dead socket while the provider was answering in 131ms.
+            kwargs={
+                "keepalives": 1,
+                "keepalives_idle": 30,
+                "keepalives_interval": 10,
+                "keepalives_count": 3,
+                "tcp_user_timeout": 120000,
+                "connect_timeout": 15,
+            },
             # Reset identity on check-in as a second line of defence. SET LOCAL
             # already dies with the transaction; this covers a connection
             # returned outside one.
             reset=_reset_connection,
+            # Validate before handing a connection out. Supabase's pooler closes
+            # connections that sit idle, and an analysis leaves them idle for
+            # minutes at a time while it waits on model calls. Without this check
+            # the pool cheerfully returns a dead socket and the next query waits
+            # forever for a reply that will never come -- a real run hung for
+            # thirteen minutes that way, and an ingestion for thirty-three.
+            check=AsyncConnectionPool.check_connection,
+            # Recycle before the pooler gets the chance. Cheaper than
+            # discovering the connection is dead on the next acquisition.
+            max_idle=120.0,
+            max_lifetime=900.0,
         )
         await _pool.open(wait=True, timeout=15)
     return _pool

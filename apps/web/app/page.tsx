@@ -10,8 +10,9 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ApiError, getSupabase, uploadImage } from "@/lib/api";
+import { ApiError, createAnalysis, getSupabase, uploadImage } from "@/lib/api";
 
 export default function CapturePage() {
   const router = useRouter();
@@ -56,7 +57,13 @@ export default function CapturePage() {
         heroProduct: heroProduct || undefined,
       });
       if (result.quality_flags.length > 0) setWarnings(result.quality_flags);
-      router.push(`/analysis/${result.upload_id}`);
+
+      // Starting the analysis returns as soon as the row exists; the graph runs
+      // on the server and the analysis page polls it. Routing on the analysis
+      // id rather than the upload id is what makes that page addressable -- the
+      // user can close the tab and come back to the same run.
+      const analysis = await createAnalysis(result.upload_id);
+      router.push(`/analysis/${analysis.id}`);
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : "Something went wrong. Please try again.",
@@ -68,11 +75,21 @@ export default function CapturePage() {
 
   return (
     <main className="py-8">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold text-slate-900">Review a display</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          Photograph the display straight on, at eye level, filling most of the frame.
-        </p>
+      <header className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Review a display</h1>
+          <p className="mt-1 text-sm text-slate-600">
+            Photograph the display straight on, at eye level, filling most of the frame.
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-4">
+          <Link href="/brand" className="text-sm font-medium underline">
+            Brand
+          </Link>
+          <Link href="/history" className="text-sm font-medium underline">
+            Past reviews
+          </Link>
+        </div>
       </header>
 
       <input
@@ -163,7 +180,7 @@ export default function CapturePage() {
                    transition disabled:cursor-not-allowed disabled:bg-slate-300
                    hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500"
       >
-        {busy ? "Uploading…" : "Start analysis"}
+        {busy ? "Starting analysis…" : "Start analysis"}
       </button>
     </main>
   );

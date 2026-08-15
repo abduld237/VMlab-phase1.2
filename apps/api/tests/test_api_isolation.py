@@ -305,3 +305,75 @@ async def test_an_uploaded_image_lands_under_its_own_tenant_prefix(client, api):
 
     assert paths
     assert all(path.startswith(f"tenant/{BETA}/") for path in paths)
+
+
+# -- starting an analysis ---------------------------------------------------
+
+
+async def test_starting_an_analysis_on_another_tenants_upload_is_refused(client):
+    """The upload id is the only thing the caller supplies, so it is the attack.
+
+    RLS makes Bob's upload invisible to Alice, so the lookup finds nothing and
+    the handler returns 404 -- the analysis must never be created, and no work
+    must be paid for on another tenant's image.
+    """
+    created = await client.post(
+        "/api/uploads",
+        files={"file": ("display.jpg", photo_bytes(), "image/jpeg")},
+        headers=auth(BOB),
+    )
+    upload_id = created.json()["upload_id"]
+
+    response = await client.post(
+        "/api/analyses", json={"upload_id": upload_id}, headers=auth(ALICE)
+    )
+
+    assert response.status_code == 404, response.text
+
+    from vmlab.tenancy.session import service_session
+
+    async with service_session() as connection:
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                "select count(*) from public.analyses where upload_id = %s", (upload_id,)
+            )
+            assert (await cursor.fetchone())[0] == 0, "no row may be created for a refused request"
+
+
+async def test_starting_an_analysis_on_a_missing_upload_is_refused(client):
+    response = await client.post(
+        "/api/analyses", json={"upload_id": str(uuid.uuid4())}, headers=auth(BOB)
+    )
+    assert response.status_code == 404
+
+
+async def test_starting_an_analysis_requires_authentication(client):
+    response = await client.post("/api/analyses", json={"upload_id": str(uuid.uuid4())})
+    assert response.status_code in (401, 403)
+
+
+# -- brand profile writes ---------------------------------------------------
+
+
+async def test_brand_updates_do_not_cross_tenants(client):
+    """Bob's save must never touch Alice's brand profile.
+
+    The update is scoped by the session's tenant, and RLS forces it, so there is
+    no request field that could redirect the write.
+    """
+    before = await client.get("/api/brand", headers=auth(ALICE))
+    alice_name = before.json().get("brand_name")
+
+    await client.put(
+        "/api/brand",
+        json={"brand_name": "Bob's Rebrand", "colours": [], "fonts": [], "categories": []},
+        headers=auth(BOB),
+    )
+
+    after = await client.get("/api/brand", headers=auth(ALICE))
+    assert after.json().get("brand_name") == alice_name, "another tenant's brand changed"
+
+
+async def test_brand_update_requires_authentication(client):
+    response = await client.put("/api/brand", json={"brand_name": "Anon"})
+    assert response.status_code in (401, 403)

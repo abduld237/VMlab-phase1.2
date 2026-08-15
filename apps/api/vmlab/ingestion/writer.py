@@ -26,6 +26,10 @@ logger = logging.getLogger(__name__)
 # enough to stay well inside the model's 8k context across a batch.
 EMBED_BATCH = 48
 
+# Rows per insert statement. Keeps each round trip to roughly 200KB of vector
+# payload, which a slow link can acknowledge comfortably.
+INSERT_BATCH = 10
+
 
 @dataclass
 class DocumentRecord:
@@ -68,9 +72,18 @@ async def write_document(
         # chunks, and doing it inside the caller's transaction means a failure
         # partway leaves the previous version intact rather than a half-written
         # document.
+        #
+        # validity_status is part of the key, not just the id and version: a
+        # superseded edition and the active one that replaced it are different
+        # documents that legitimately share both. Keying on two columns made the
+        # second write delete the first, and the corpus silently lost Document
+        # 11's current 60-page edition to its 29-page predecessor.
         await cursor.execute(
-            "delete from public.kb_documents where document_id = %s and version = %s",
-            (document.document_id, document.version),
+            """
+            delete from public.kb_documents
+            where document_id = %s and version = %s and validity_status = %s
+            """,
+            (document.document_id, document.version, document.validity_status),
         )
         await cursor.execute(
             """
@@ -88,23 +101,32 @@ async def write_document(
         )
         document_row_id = (await cursor.fetchone())[0]
 
-        await cursor.executemany(
-            """
-            insert into public.kb_chunks
-                (kb_document_id, domain, scope, authority, validity_status,
-                 chunk_index, content, content_type, section_path, page,
-                 rule_ids, embedding)
-            values (%s,%s,'universal',%s,%s,%s,%s,%s,%s,%s,%s,%s::vector)
-            """,
-            [
-                (
-                    document_row_id, document.domain, document.authority,
-                    document.validity_status, chunk.chunk_index, chunk.content,
-                    chunk.content_type, chunk.section_path or None, chunk.page,
-                    chunk.rule_ids, str(vector),
-                )
-                for chunk, vector in zip(chunks, embeddings, strict=True)
-            ],
-        )
+        rows = [
+            (
+                document_row_id, document.domain, document.authority,
+                document.validity_status, chunk.chunk_index, chunk.content,
+                chunk.content_type, chunk.section_path or None, chunk.page,
+                chunk.rule_ids, str(vector),
+            )
+            for chunk, vector in zip(chunks, embeddings, strict=True)
+        ]
+
+        # Sent in batches rather than one statement. A 1024-dimension vector
+        # serialises to roughly 20KB, so a large document is well over a
+        # megabyte in a single executemany -- enough to sit unacknowledged long
+        # enough on a high-latency link for the kernel to abort the connection
+        # mid-write. Smaller statements also mean a stall shows up as a slow
+        # write rather than a dead socket.
+        for start in range(0, len(rows), INSERT_BATCH):
+            await cursor.executemany(
+                """
+                insert into public.kb_chunks
+                    (kb_document_id, domain, scope, authority, validity_status,
+                     chunk_index, content, content_type, section_path, page,
+                     rule_ids, embedding)
+                values (%s,%s,'universal',%s,%s,%s,%s,%s,%s,%s,%s,%s::vector)
+                """,
+                rows[start : start + INSERT_BATCH],
+            )
 
     return str(document_row_id)

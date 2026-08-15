@@ -85,22 +85,45 @@ async def retrieve_knowledge(
     }
 
 
-def build_graph(client: OpenRouterClient, retriever: Retriever | None) -> Any:
+StageCallback = Any  # Callable[[str], Awaitable[None]] | None
+
+
+async def _announce(on_stage: StageCallback, stage: str) -> None:
+    """Report a stage transition, never letting reporting break the analysis."""
+    if on_stage is None:
+        return
+    try:
+        await on_stage(stage)
+    except Exception:  # noqa: BLE001 - progress reporting is not load-bearing
+        logger.warning("could not report stage %s", stage, exc_info=True)
+
+
+def build_graph(
+    client: OpenRouterClient, retriever: Retriever | None, on_stage: StageCallback = None
+) -> Any:
     """Compile the analysis graph with its dependencies bound in.
 
     LangGraph nodes take only state, so the client and retriever are closed over
     here rather than smuggled through the state dict -- keeping state to plain
     serialisable data is what lets it be checkpointed and logged.
+
+    `on_stage` fires as each stage begins. The UI shows named progress steps
+    rather than a spinner (PRD §7.1), and those names have to come from where
+    the pipeline actually is -- a timer pretending to be progress would drift
+    from reality the moment a stage ran long.
     """
     graph = StateGraph(AnalysisState)
 
     async def evidence_node(state: AnalysisState) -> dict:
+        await _announce(on_stage, "extracting")
         return await extract_evidence(state, client)
 
     async def retrieval_node(state: AnalysisState) -> dict:
+        await _announce(on_stage, "retrieving")
         return await retrieve_knowledge(state, client, retriever)
 
     async def synthesis_node(state: AnalysisState) -> dict:
+        await _announce(on_stage, "synthesising")
         return await synthesise(state, client)
 
     graph.add_node("evidence", evidence_node)
@@ -112,6 +135,10 @@ def build_graph(client: OpenRouterClient, retriever: Retriever | None) -> Any:
         # variable would give all three the same value.
         def make_node(p: Perspective):
             async def node(state: AnalysisState) -> dict:
+                # All three fan out together, so the first to start is what the
+                # user is waiting on; reporting from each is harmless and avoids
+                # a separate co-ordination step.
+                await _announce(on_stage, "reasoning")
                 return await run_specialist(state, client, p)
 
             return node
@@ -142,6 +169,7 @@ async def run_analysis(
     hero_product: str | None = None,
     brand_context: dict | None = None,
     timeout_seconds: int | None = None,
+    on_stage: StageCallback = None,
 ) -> tuple[AnalysisResult, dict]:
     """Run one analysis end to end.
 
@@ -149,7 +177,7 @@ async def run_analysis(
     and measured cost -- which the caller persists against the analysis row.
     """
     settings = get_settings()
-    compiled = build_graph(client, retriever)
+    compiled = build_graph(client, retriever, on_stage)
 
     initial: AnalysisState = {
         "image_bytes": image_bytes,

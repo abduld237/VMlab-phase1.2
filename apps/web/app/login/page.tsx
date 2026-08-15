@@ -3,13 +3,25 @@
 /**
  * Screen 1: sign in. Magic link rather than a password, so no credential is
  * ever typed into or stored by this application.
+ *
+ * A password path exists behind NEXT_PUBLIC_ALLOW_PASSWORD_LOGIN, off unless
+ * explicitly set. It is there because magic links need working email: Supabase's
+ * built-in sender allows only a handful of messages an hour and will not deliver
+ * to a made-up domain at all, so with links alone nobody can sign in locally or
+ * demonstrate the product. Configure real SMTP before a pilot and leave this
+ * flag unset in production.
  */
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/api";
 
+const PASSWORD_LOGIN = process.env.NEXT_PUBLIC_ALLOW_PASSWORD_LOGIN === "true";
+
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -18,6 +30,15 @@ export default function LoginPage() {
     event.preventDefault();
     setBusy(true);
     setError(null);
+
+    if (PASSWORD_LOGIN && password) {
+      const { error } = await getSupabase().auth.signInWithPassword({ email, password });
+      if (error) setError(error.message);
+      else router.replace("/");
+      setBusy(false);
+      return;
+    }
+
     const { error } = await getSupabase().auth.signInWithOtp({
       email,
       options: { emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined },
@@ -51,6 +72,25 @@ export default function LoginPage() {
             />
           </label>
 
+          {PASSWORD_LOGIN && (
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">
+                Password{" "}
+                <span className="font-normal text-slate-500">
+                  (leave blank to be sent a link)
+                </span>
+              </span>
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="current-password"
+                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-base
+                           focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+              />
+            </label>
+          )}
+
           {error && (
             <p className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">
               {error}
@@ -63,7 +103,11 @@ export default function LoginPage() {
             className="w-full rounded-lg bg-slate-900 py-3 font-medium text-white
                        disabled:bg-slate-300 hover:bg-slate-800"
           >
-            {busy ? "Sending…" : "Email me a sign-in link"}
+            {busy
+              ? "Signing in…"
+              : PASSWORD_LOGIN && password
+                ? "Sign in"
+                : "Email me a sign-in link"}
           </button>
         </form>
       )}

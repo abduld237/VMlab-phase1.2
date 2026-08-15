@@ -14,6 +14,7 @@ import base64
 import json
 import logging
 import time
+from collections.abc import Callable
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
@@ -33,7 +34,11 @@ from vmlab.retrieval.retriever import RetrievedChunk
 
 logger = logging.getLogger(__name__)
 
-MAX_KNOWLEDGE_CHARS = 6000
+# Rule-bearing chunks average 2,000-2,500 characters, so a 6,000 budget fit only
+# two or three and routinely cut every citable rule out of the prompt. This holds
+# roughly the full top-k without meaningfully moving cost: a measured analysis
+# runs at $0.0024 and the prompt is a small part of that.
+MAX_KNOWLEDGE_CHARS = 16000
 
 
 class SpecialistItems(BaseModel):
@@ -46,6 +51,55 @@ class SpecialistItems(BaseModel):
     items: list[SpecialistItem]
 
 
+# Keys a model plausibly uses for the items array when it ignores the envelope.
+_ITEMS_ALIASES = ("items", "findings", "observations", "recommendations", "results")
+
+
+def _coerce_items(payload: Any) -> Any:
+    """Reshape near-miss specialist responses into the {"items": [...]} envelope.
+
+    A reasoning model that narrates before answering returns things like
+    {"analysis": "We need to ..."} or a bare top-level array. Both carry the
+    content we asked for in a shape pydantic rejects. Repairing the envelope
+    here costs nothing and avoids burning a retry -- and a burnt retry is how
+    the creative_vm specialist dropped out of a real run entirely.
+    """
+    if isinstance(payload, list):
+        return {"items": payload}
+    if not isinstance(payload, dict):
+        return payload
+    if isinstance(payload.get("items"), list):
+        return payload
+
+    for alias in _ITEMS_ALIASES:
+        if isinstance(payload.get(alias), list):
+            return {"items": payload[alias]}
+
+    # Last resort: exactly one list-of-objects value, whatever it is called.
+    lists = [
+        value
+        for value in payload.values()
+        if isinstance(value, list) and value and all(isinstance(item, dict) for item in value)
+    ]
+    if len(lists) == 1:
+        return {"items": lists[0]}
+    return payload
+
+
+def _top_level_keys(schema: type) -> str:
+    """The schema's own field names, for the retry instruction.
+
+    Derived rather than written out: an earlier version hardcoded the
+    specialist's keys into this shared helper, so a synthesis retry told the
+    model to return specialist output -- and it obliged, failing all three
+    attempts on a schema it had been instructed to violate.
+    """
+    fields = getattr(schema, "model_fields", None)
+    if not fields:
+        return "as described above"
+    return ", ".join(f'"{name}"' for name in fields)
+
+
 async def _call_json(
     client: OpenRouterClient,
     *,
@@ -53,10 +107,17 @@ async def _call_json(
     messages: list[dict[str, Any]],
     schema: type,
     max_tokens: int = 2500,
-    attempts: int = 2,
+    attempts: int = 3,
+    coerce: Callable[[Any], Any] | None = None,
+    retry_reminder: str = "",
 ) -> tuple[Any, Completion]:
-    """Call the model and validate the response, retrying once on bad shape."""
+    """Call the model and validate the response, retrying on bad shape.
+
+    `coerce` gets a chance to repair a near-miss payload before validation, so
+    a recoverable shape error does not consume an attempt.
+    """
     last_error: Exception | None = None
+    base_messages = messages
 
     for attempt in range(attempts):
         completion = await client.complete(
@@ -69,17 +130,26 @@ async def _call_json(
             temperature=0.2 if attempt == 0 else 0.5,
         )
         try:
-            return schema.model_validate(completion.as_json()), completion
+            payload = completion.as_json()
+            if coerce is not None:
+                payload = coerce(payload)
+            return schema.model_validate(payload), completion
         except (ValidationError, OpenRouterError) as exc:
             last_error = exc
             logger.warning("schema validation failed on attempt %d: %s", attempt + 1, exc)
-            messages = messages + [
-                {"role": "assistant", "content": completion.text[:1500]},
+            # Rebuild from the original messages rather than appending each
+            # failure. Feeding a reasoning model its own narration back is what
+            # makes it narrate again, and the transcript grows every round.
+            messages = base_messages + [
+                {"role": "assistant", "content": completion.text[:600]},
                 {
                     "role": "user",
                     "content": (
-                        f"That response did not match the required schema: {exc}. "
-                        f"Return only valid JSON matching the schema exactly."
+                        f"That response did not match the required schema: "
+                        f"{str(exc)[:400]}. Respond with a single JSON object and "
+                        f"nothing else -- no prose, no explanation, no reasoning. "
+                        f"Its top-level keys must be exactly: "
+                        f"{_top_level_keys(schema)}." + retry_reminder
                     ),
                 },
             ]
@@ -87,26 +157,74 @@ async def _call_json(
     raise OpenRouterError(f"model failed schema validation after {attempts} attempts: {last_error}")
 
 
-def _render_knowledge(chunks: list[RetrievedChunk]) -> str:
+def _permitted_rule_ids(chunks: list[RetrievedChunk]) -> set[str]:
+    """Every rule ID actually present in what was retrieved for this perspective."""
+    return {rule_id for chunk in chunks for rule_id in chunk.rule_ids}
+
+
+def _enforce_citations(items: list[SpecialistItem], permitted: set[str], label: str) -> None:
+    """Drop cited rule IDs that are not in the retrieved evidence.
+
+    Left unchecked the model invents citations that look exactly like the real
+    scheme -- a run against a real photo produced V20-10.1, V16-19.3, V16-12.1
+    and V19-18.1, none of which exist anywhere in the corpus. A fabricated
+    citation is worse than no citation: it reads as authoritative and cannot be
+    checked by the person reading the report. Only IDs the retrieval layer
+    actually returned may be shown, so a claim can always be traced back to a
+    real chunk of the client's own standards.
+    """
+    for item in items:
+        kept = [rule_id for rule_id in item.supporting_rule_ids if rule_id in permitted]
+        dropped = [rule_id for rule_id in item.supporting_rule_ids if rule_id not in permitted]
+        if dropped:
+            logger.warning("%s cited rule ids not in retrieved evidence: %s", label, dropped)
+        item.supporting_rule_ids = kept
+
+
+def _render_knowledge(chunks: list[RetrievedChunk]) -> tuple[str, list[RetrievedChunk]]:
     """Format retrieved chunks for a prompt, cheapest-to-drop last.
 
     Chunks arrive authority-first, so truncating from the end drops illustrative
     material before canonical -- the opposite order would silently discard the
     client's own standards when a bundle runs long.
+
+    Returns the rendered text and the chunks that actually fit. Callers need the
+    second value: a rule whose text was truncated away cannot honestly be cited,
+    so the permitted-citation set has to follow what the model was shown rather
+    than everything retrieval returned.
     """
     if not chunks:
-        return "(no knowledge base excerpts were retrieved for this perspective)"
+        return "(no knowledge base excerpts were retrieved for this perspective)", []
+
+    # Within an authority tier, a chunk carrying rule ids goes first. Doc 29 §13
+    # is explicit that the governing rule matters more than the closest match,
+    # and a chunk with no rule id cannot be cited at all -- so when space is
+    # short, the citable one earns the room. Authority order itself is never
+    # reordered; illustrative material must not overtake canonical.
+    order = {"canonical": 0, "guidance": 1, "illustrative": 2, "historical": 3}
+    ranked = sorted(
+        enumerate(chunks),
+        key=lambda pair: (
+            order.get(pair[1].authority, 9),
+            0 if pair[1].rule_ids else 1,
+            pair[0],  # keep retrieval's ranking as the final tiebreak
+        ),
+    )
 
     rendered: list[str] = []
+    used: list[RetrievedChunk] = []
     budget = MAX_KNOWLEDGE_CHARS
-    for chunk in chunks:
+    for _, chunk in ranked:
         rules = f" [rules: {', '.join(chunk.rule_ids)}]" if chunk.rule_ids else ""
         block = f"--- {chunk.citation} ({chunk.authority}){rules}\n{chunk.content}"
+        # Skip rather than stop: one oversized chunk should not shut out every
+        # smaller one behind it.
         if len(block) > budget:
-            break
+            continue
         rendered.append(block)
+        used.append(chunk)
         budget -= len(block)
-    return "\n\n".join(rendered)
+    return "\n\n".join(rendered), used
 
 
 # ---------------------------------------------------------------------------
@@ -187,6 +305,32 @@ async def run_specialist(
         state.get("brand_context"),
     )
 
+    # Naming the legal identifiers inline is the cheap half of the citation
+    # guard; _enforce_citations below is the half that actually holds.
+    #
+    # Permitted ids come from the chunks that survived truncation, not from
+    # everything retrieved -- offering an id whose rule text was cut leaves the
+    # model citing something it cannot see.
+    knowledge, shown = _render_knowledge(chunks)
+    permitted = _permitted_rule_ids(shown)
+    if permitted:
+        # Phrased as an expectation, not just a prohibition. An earlier version
+        # ended on "if no listed rule supports a point, return an empty array"
+        # and the model took that exit every time, trading fabricated citations
+        # for no citations at all.
+        citation_rule = (
+            "CITATIONS: cite the rule identifiers that support your points. "
+            "Valid identifiers, copied exactly: " + ", ".join(sorted(permitted))
+            + ". Most points should carry at least one. Never invent an "
+            "identifier, never reformat one, and never cite a document id such "
+            "as VMLAB-KB-14A.3 -- only the rule ids listed above are valid."
+        )
+    else:
+        citation_rule = (
+            "CITATIONS: no rule identifiers were retrieved for this perspective, "
+            "so supporting_rule_ids must be an empty array on every item."
+        )
+
     messages = [
         {
             "role": "system",
@@ -198,9 +342,11 @@ async def run_specialist(
             "role": "user",
             "content": prompts.SPECIALIST_USER.format(
                 evidence=state["evidence"].model_dump_json(indent=2),
-                knowledge=_render_knowledge(chunks),
+                knowledge=knowledge,
                 context=context,
-            ),
+            )
+            + "\n\n"
+            + citation_rule,
         },
     ]
 
@@ -210,6 +356,11 @@ async def run_specialist(
             model=settings.reasoning_model,
             messages=messages,
             schema=SpecialistItems,
+            coerce=_coerce_items,
+            # The retry message becomes the last thing the model reads, so the
+            # citation rule has to travel with it or a retried specialist
+            # silently returns no citations at all.
+            retry_reminder=" " + citation_rule,
         )
     except OpenRouterError as exc:
         # Degrade: two perspectives plus an honest note beats no result at all.
@@ -219,6 +370,7 @@ async def run_specialist(
             "stage_timings_ms": {perspective.value: int((time.monotonic() - started) * 1000)},
         }
 
+    _enforce_citations(parsed.items, permitted, perspective.value)
     finding = SpecialistFinding(perspective=perspective, items=parsed.items)
     return {
         "findings": [finding],
@@ -262,6 +414,21 @@ async def synthesise(state: AnalysisState, client: OpenRouterClient) -> dict:
         schema=Synthesis,
         max_tokens=3000,
     )
+
+    # Synthesis may only carry citations forward, never introduce new ones: the
+    # specialists' ids are already filtered against retrieved evidence, so
+    # anything outside that union was invented at this stage.
+    carried = {
+        rule_id
+        for finding in findings
+        for item in finding.items
+        for rule_id in item.supporting_rule_ids
+    }
+    for action in parsed.actions:
+        dropped = [r for r in action.supporting_rule_ids if r not in carried]
+        if dropped:
+            logger.warning("synthesis cited rule ids no specialist supported: %s", dropped)
+        action.supporting_rule_ids = [r for r in action.supporting_rule_ids if r in carried]
 
     # If a specialist dropped out, disclose it here rather than letting the
     # result read as a complete three-perspective analysis.

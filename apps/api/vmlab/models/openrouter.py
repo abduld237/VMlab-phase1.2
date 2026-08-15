@@ -63,7 +63,13 @@ class OpenRouterClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
                 base_url=self.settings.openrouter_base_url,
-                timeout=httpx.Timeout(120.0, connect=10.0),
+                # Read timeout sits above the slowest single call, not above a
+                # whole analysis. Synthesis measures 106-110s against the live
+                # corpus, so the old 120s left no headroom and a run that had
+                # already paid for evidence, retrieval and three specialists
+                # died on the last call with a bare ReadTimeout. The analysis
+                # ceiling in Settings is what bounds total duration.
+                timeout=httpx.Timeout(240.0, connect=30.0),
                 headers={
                     "Authorization": f"Bearer {self.settings.openrouter_api_key}",
                     "Content-Type": "application/json",
@@ -109,7 +115,41 @@ class OpenRouterClient:
         if json_object:
             payload["response_format"] = {"type": "json_object"}
 
-        response = await self.client.post("/chat/completions", json=payload)
+        # Retry transient failures. Without this a single dropped connection
+        # ends an analysis that has already paid for every stage before it --
+        # a real run died on a ConnectTimeout during evidence extraction while
+        # the provider was healthy a second later. Only network faults and the
+        # provider's own retryable statuses qualify; a 400 is our bug and
+        # repeating it just costs money.
+        delay = 2.0
+        for attempt in range(3):
+            try:
+                response = await self.client.post("/chat/completions", json=payload)
+            except httpx.TransportError as exc:
+                if attempt == 2:
+                    raise OpenRouterError(
+                        f"{model} unreachable after 3 attempts: {type(exc).__name__}"
+                    ) from exc
+                logger.warning(
+                    "%s transport error (%s), retrying in %.0fs (attempt %d/3)",
+                    model, type(exc).__name__, delay, attempt + 1,
+                )
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 20.0)
+                continue
+
+            if response.status_code not in (429, 502, 503, 529):
+                break
+            if attempt == 2:
+                break
+            wait = float(response.headers.get("retry-after") or delay)
+            logger.warning(
+                "%s returned %s, retrying in %.0fs (attempt %d/3)",
+                model, response.status_code, wait, attempt + 1,
+            )
+            await asyncio.sleep(wait)
+            delay = min(delay * 2, 20.0)
+
         if response.status_code >= 400:
             raise OpenRouterError(f"{model} returned {response.status_code}: {response.text[:400]}")
 

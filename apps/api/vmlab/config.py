@@ -85,7 +85,13 @@ class Settings(BaseSettings):
     # PRD §8 targets a result inside 60s where practical and allows longer
     # when progress is communicated, which the UI does. This is the hard
     # ceiling before a run is abandoned, not the expected duration.
-    analysis_timeout_seconds: int = 180
+    #
+    # Raised from 180 after measuring real runs against the live knowledge base
+    # at 225-237s: the old ceiling killed healthy analyses seconds before they
+    # finished. It is a backstop, not a target -- the 60s goal is a latency
+    # problem to solve, and most of the current gap is the Dhaka-to-London
+    # round trip on every database call, which deploying in London removes.
+    analysis_timeout_seconds: int = 420
     retrieval_top_k: int = 8
 
     @property

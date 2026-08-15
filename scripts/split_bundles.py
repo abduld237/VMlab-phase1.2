@@ -198,8 +198,16 @@ def mark_superseded(documents: list[Document]) -> None:
     for number, group in seen.items():
         if len(group) == 1:
             continue
-        for document in group[:-1]:
+        active = group[-1]
+        for index, document in enumerate(group[:-1]):
             document.validity_status = "superseded"
+            # Ingestion identifies a document by (document_id, version), so two
+            # editions both claiming v1.0 collide: writing the second deletes
+            # the first. Document 11 lost its 60-page current edition to its own
+            # 29-page predecessor that way. Give the older editions a distinct
+            # version so both survive and the active one stays retrievable.
+            if document.version == active.version:
+                document.version = f"{document.version}-prior{index + 1}"
         print(
             f"  ! Document {number} has {len(group)} editions "
             f"({', '.join(f'{d.page_count}pp v{d.version}' for d in group)}) "

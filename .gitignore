@@ -27,3 +27,6 @@ out/
 data/split/*.pdf
 data/fixtures/
 data/benchmark/
+
+# TypeScript incremental build cache
+*.tsbuildinfo

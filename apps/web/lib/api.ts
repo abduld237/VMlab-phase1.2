@@ -140,6 +140,24 @@ export async function uploadImage(
   return handle<UploadResult>(response);
 }
 
+/**
+ * Run the pipeline over a stored upload.
+ *
+ * Returns as soon as the row exists -- the graph keeps running server-side and
+ * the caller polls getAnalysis. Only the id and initial status come back, not a
+ * finished analysis.
+ */
+export async function createAnalysis(
+  uploadId: string,
+): Promise<{ id: string; status: Analysis["status"] }> {
+  const response = await fetch(`${API_URL}/api/analyses`, {
+    method: "POST",
+    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
+    body: JSON.stringify({ upload_id: uploadId }),
+  });
+  return handle<{ id: string; status: Analysis["status"] }>(response);
+}
+
 export async function listAnalyses(): Promise<Analysis[]> {
   const response = await fetch(`${API_URL}/api/analyses`, {
     headers: await authHeaders(),
@@ -170,6 +188,30 @@ export async function submitFeedback(
     body: JSON.stringify(body),
   });
   return handle<{ feedback_id: string }>(response);
+}
+
+export type Brand = {
+  brand_name: string | null;
+  tone_of_voice: string | null;
+  guidelines: string | null;
+  colours: string[];
+  fonts: string[];
+  categories: string[];
+};
+
+export async function getBrand(): Promise<Partial<Brand>> {
+  const response = await fetch(`${API_URL}/api/brand`, { headers: await authHeaders() });
+  return handle<Partial<Brand>>(response);
+}
+
+/** Administrators only; the API returns 403 for standard users. */
+export async function updateBrand(brand: Brand): Promise<{ brand_name: string }> {
+  const response = await fetch(`${API_URL}/api/brand`, {
+    method: "PUT",
+    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
+    body: JSON.stringify(brand),
+  });
+  return handle<{ brand_name: string }>(response);
 }
 
 export const PERSPECTIVE_LABELS: Record<Perspective, string> = {

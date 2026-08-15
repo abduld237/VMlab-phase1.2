@@ -24,9 +24,11 @@ const STAGES: { key: Analysis["status"]; label: string }[] = [
 ];
 
 const POLL_MS = 2000;
-// An analysis should finish well inside a minute; past this something is wrong
-// and saying so beats polling silently forever.
-const GIVE_UP_MS = 180_000;
+// Generous on purpose. A measured run against the live knowledge base took
+// 237s, so the old 60s-era ceiling would have declared a healthy analysis dead.
+// The server marks its own stalled rows failed, so this is only a backstop for
+// the case where polling itself cannot reach it.
+const GIVE_UP_MS = 600_000;
 
 export default function AnalysisPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -143,9 +145,14 @@ export default function AnalysisPage({ params }: { params: Promise<{ id: string 
     <main className="py-8">
       <header className="mb-6 flex items-start justify-between gap-4">
         <h1 className="text-2xl font-semibold text-slate-900">Display review</h1>
-        <Link href="/" className="shrink-0 text-sm font-medium underline">
-          New review
-        </Link>
+        <div className="flex shrink-0 gap-4">
+          <Link href="/history" className="text-sm font-medium underline">
+            Past reviews
+          </Link>
+          <Link href="/" className="text-sm font-medium underline">
+            New review
+          </Link>
+        </div>
       </header>
 
       <Results analysis={analysis} />
