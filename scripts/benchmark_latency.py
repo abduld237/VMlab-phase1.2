@@ -35,6 +35,7 @@ from vmlab.config import get_settings  # noqa: E402
 from vmlab.graph.nodes.validate import ImageRejected, validate_and_normalise  # noqa: E402
 from vmlab.graph.pipeline import run_analysis  # noqa: E402
 from vmlab.models.openrouter import OpenRouterClient  # noqa: E402
+from vmlab.observability import configure_tracing  # noqa: E402
 from vmlab.tenancy.session import close_pool, open_pool  # noqa: E402
 
 BENCHMARK_DIR = REPO_ROOT / "data" / "benchmark"
@@ -231,6 +232,9 @@ async def main() -> int:
         return 1
 
     settings = get_settings()
+    # The harness bypasses the API, so it has to switch tracing on itself.
+    if configure_tracing():
+        print(f"tracing to langsmith project {settings.langsmith_project!r}")
     print(f"vision={settings.vision_model}  reasoning={settings.reasoning_model}")
     print(f"{len(paths)} images, sequentially, label={args.label!r}")
 

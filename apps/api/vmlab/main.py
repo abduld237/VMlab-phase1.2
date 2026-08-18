@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from vmlab.api.routes import analyses
 from vmlab.config import get_settings
+from vmlab.observability import configure_tracing
 from vmlab.tenancy.session import close_pool, open_pool, service_session
 
 logging.basicConfig(
@@ -20,6 +21,9 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Before anything runs a graph: the tracer reads os.environ, and our
+    # configuration lives in a Settings object that never touches it.
+    configure_tracing()
     await open_pool()
     await assert_rls_enabled()
     yield

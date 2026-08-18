@@ -151,6 +151,17 @@ class Settings(BaseSettings):
     analysis_timeout_seconds: int = 120
     retrieval_top_k: int = 8
 
+    # --- Tracing -----------------------------------------------------------
+    # LangSmith is off unless explicitly switched on. It is a debugging tool,
+    # not part of the product: when enabled, every graph run -- including the
+    # retrieved knowledge-base excerpts carried in the prompts -- is uploaded
+    # to LangChain's servers. That corpus is the client's confidential
+    # material, so the default has to be off and the switch has to be obvious.
+    langsmith_tracing: bool = False
+    langsmith_api_key: str = ""
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
+    langsmith_project: str = "vmlab-phase1"
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
