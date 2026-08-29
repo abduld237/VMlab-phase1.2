@@ -14,7 +14,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # The repo root, four levels up from apps/api/vmlab/config.py. Resolved from
 # __file__ rather than the working directory so `uvicorn` started from apps/api
 # and `pytest` started from the root both find the same file.
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+#
+# Deployment flattens this. Railway's Root Directory setting copies apps/api to
+# the image root, leaving only /app/vmlab/config.py -- three levels, and
+# parents[3] is an IndexError raised at import, before logging exists to report
+# it. There is no repo root there and nothing needs one: the .env files below
+# do not exist in a container, and injected environment variables outrank them
+# anyway. So fall back to the deepest parent rather than failing to start.
+_CONFIG_PARENTS = Path(__file__).resolve().parents
+_REPO_ROOT = _CONFIG_PARENTS[3] if len(_CONFIG_PARENTS) > 3 else _CONFIG_PARENTS[-1]
 
 
 class Settings(BaseSettings):
@@ -28,6 +36,13 @@ class Settings(BaseSettings):
     )
 
     environment: str = "development"
+
+    # Browser origins allowed to call this API, comma separated. Empty in
+    # development, where any origin is accepted; required in production, where
+    # the deployed frontend is a different origin to the API and every request
+    # fails preflight without it. Set it to the web service's public URL, e.g.
+    # `https://vmlab-web-production.up.railway.app`.
+    cors_allowed_origins: str = ""
 
     # --- Database ----------------------------------------------------------
     database_url: str = "postgresql://postgres:vmlab@localhost:55432/vmlab"
@@ -165,6 +180,10 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
 
 
 @lru_cache(maxsize=1)

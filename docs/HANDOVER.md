@@ -125,7 +125,7 @@ just change. Check with `ss -ltnp | grep 8000` before assuming a restart took.
 **Tests:**
 
 ```bash
-cd apps/api && ../../.venv/bin/python -m pytest tests/ -q   # 95 tests
+cd apps/api && ../../.venv/bin/python -m pytest tests/ -q   # 99 tests
 bash db/test/run.sh                                          # SQL isolation, needs Docker
 ```
 
@@ -332,14 +332,98 @@ state it as a floor.
 
 ---
 
-## 8. Deployment (not yet done)
+## 8. Deployment to Railway
 
-Both services deploy from the GitHub repo. Set the environment variables from §2
-in Railway, choose the **London region** so the database round trip stays local,
-and point `NEXT_PUBLIC_API_URL` at the deployed API.
+Two services from the one repo, each with its own **Root Directory** — that
+setting is what makes the monorepo work. Without it Railpack inspects the repo
+root, finds no Python and no `package.json`, and fails during "Build image"
+having never looked inside `apps/`.
 
-After deploying, re-run the §9 verification against the deployed environment.
-Passing locally is not the same claim.
+Build and start commands live in `apps/api/railway.json` and
+`apps/web/railway.json`, so they are versioned rather than typed into a
+dashboard nobody else can see. Railway reads that file from the service's root
+directory; there is nothing to configure by hand beyond the root directory
+itself and the variables.
+
+### The API service
+
+| Setting | Value |
+|---|---|
+| Root Directory | `apps/api` |
+| Region | `europe-west4` (Amsterdam) — Railway has no London region; this is the closest to the `eu-west-2` database |
+| Everything else | from `railway.json` |
+
+Variables — all of §2, plus one that only matters here:
+
+```
+ENVIRONMENT=production
+CORS_ALLOWED_ORIGINS=https://<the web service domain>
+DATABASE_URL=...            # session pooler, password percent-encoded
+SUPABASE_URL=...
+SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+OPENROUTER_API_KEY=...
+```
+
+Leave `LANGSMITH_TRACING` unset. Enabling it uploads retrieved corpus text —
+the client's confidential material — to a third party.
+
+**`CORS_ALLOWED_ORIGINS` is not optional in production.** The API and the
+frontend are different origins once deployed, so with it empty every browser
+request fails preflight and the UI looks broken while the API answers `curl`
+perfectly. Startup logs a warning when production runs without it. It is
+chicken-and-egg with the web service's domain: deploy the API, deploy the web
+service, then come back and set this.
+
+### The web service
+
+| Setting | Value |
+|---|---|
+| Root Directory | `apps/web` |
+| Region | same as the API |
+
+```
+NEXT_PUBLIC_API_URL=https://<the API service domain>
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+```
+
+Next.js inlines `NEXT_PUBLIC_*` at **build** time, not at run time. Changing one
+requires a redeploy, not a restart — and the API must have a domain before the
+web build runs. Do not set `NEXT_PUBLIC_ALLOW_PASSWORD_LOGIN` in production.
+
+### Supabase, after the domains exist
+
+Authentication → URL Configuration: set **Site URL** to the web service's domain
+and add it to **Redirect URLs**. The login page derives its magic-link redirect
+from `window.location.origin`, so the code needs no change — but Supabase
+refuses redirects to origins it does not know, and the link silently bounces.
+
+Sign-in also needs real SMTP configured (§10). Until it is, nobody outside the
+team can log in to the deployed instance.
+
+### Order of operations
+
+1. Deploy the API. Confirm `GET /health` returns `{"status":"ok"}` and
+   `GET /health/db` reports the tenant and chunk counts.
+2. Deploy the web service with `NEXT_PUBLIC_API_URL` pointing at it.
+3. Set `CORS_ALLOWED_ORIGINS` on the API to the web domain; redeploy the API.
+4. Add both URLs to Supabase auth configuration.
+5. Re-run the §9 verification against the deployed environment. Passing locally
+   is not the same claim.
+
+### Two things that will bite
+
+**Keep both services at one replica.** An analysis runs as a detached
+`asyncio` task inside the process that accepted the upload
+(`analyses.py:226`). A second replica cannot report progress for a run it is
+not hosting, and a redeploy mid-analysis strands that row in `processing`
+forever — there is no queue and no resume.
+
+**The repo belongs to Abdul's GitHub account.** Deploying from GitHub needs the
+Railway app installed on `abduld237/VMlab-phase1.2`, which only someone with
+admin on that repo can authorise. `railway up` from the CLI uploads the working
+tree directly and needs no GitHub connection at all.
 
 ---
 
@@ -375,7 +459,10 @@ Against the environment you intend to demonstrate:
 
 ## 10. Known gaps
 
-- **Not deployed.** Everything above runs locally against the live database.
+- **Not yet deployed.** Everything above was verified locally against the
+  live database. The Railway configuration in §8 exists and the two defects
+  that blocked a container build are fixed, but no deployed environment has
+  been through the §9 checklist yet.
 - **Coverage is uneven by domain.** Commercial has a mature bespoke corpus;
   Creative VM and Retail Psychology are thinner, so Commercial output reads
   sharper. That is a property of the source material, not a pipeline fault —

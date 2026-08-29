@@ -108,7 +108,7 @@ That 403 is the isolation model working, not a bug. See `docs/HANDOVER.md` §11.
 ## Tests
 
 ```bash
-cd apps/api && ../../.venv/bin/python -m pytest -q    # 95 tests
+cd apps/api && ../../.venv/bin/python -m pytest -q    # 99 tests
 cd apps/web && npm run typecheck && npx next build
 bash db/test/run.sh                                   # SQL-level isolation assertions
 ```
@@ -184,5 +184,7 @@ project. Measured over all twenty benchmark photographs: **p50 18.6s, p90 20.7s,
 p50 195s before the latency work; `docs/HANDOVER.md` §6 explains what moved and
 what would undo it.
 
-Not yet deployed, and sign-in needs real SMTP configured before anyone outside
-the team can log in.
+Not yet deployed. Railway configuration for both services lives in
+`apps/api/railway.json` and `apps/web/railway.json`, with the setup steps and
+traps in `docs/HANDOVER.md` §8. Sign-in needs real SMTP configured before
+anyone outside the team can log in.

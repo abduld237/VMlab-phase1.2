@@ -81,9 +81,21 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Development accepts any origin so a colleague on another host can point a
+# local frontend at a shared API. Production accepts exactly what
+# CORS_ALLOWED_ORIGINS names -- and if that is empty, nothing, which is a
+# deployment that fails visibly on the first request rather than one that
+# quietly trusts the internet.
+if settings.is_production and not settings.cors_origins:
+    logger.warning(
+        "ENVIRONMENT=production with no CORS_ALLOWED_ORIGINS -- browser "
+        "requests from the deployed frontend will be refused. Set it to the "
+        "web service's public URL."
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if not settings.is_production else [],
+    allow_origins=settings.cors_origins if settings.is_production else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
