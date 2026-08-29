@@ -184,7 +184,10 @@ project. Measured over all twenty benchmark photographs: **p50 18.6s, p90 20.7s,
 p50 195s before the latency work; `docs/HANDOVER.md` §6 explains what moved and
 what would undo it.
 
-Not yet deployed. Railway configuration for both services lives in
-`apps/api/railway.json` and `apps/web/railway.json`, with the setup steps and
-traps in `docs/HANDOVER.md` §8. Sign-in needs real SMTP configured before
-anyone outside the team can log in.
+Deployed on Railway — frontend at
+https://ravishing-courage-production-7828.up.railway.app, API at
+https://vmlab-phase12-production.up.railway.app. Configuration for both
+services lives in `apps/api/railway.json` and `apps/web/railway.json`, with the
+setup steps and traps in `docs/HANDOVER.md` §8. Sign-in needs real SMTP
+configured before anyone outside the team can log in, so no analysis has yet
+been run through the deployed frontend.

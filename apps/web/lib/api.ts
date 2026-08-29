@@ -9,7 +9,15 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+/**
+ * Trailing slashes are stripped, because leaving one on is silent and awful.
+ * A base URL entered as `https://api.example.com/` builds `…com//api/uploads`,
+ * which matches no route, so FastAPI answers with its own `{"detail":"Not
+ * Found"}` -- indistinguishable in the UI from a missing record, and nowhere
+ * near the actual mistake. Every deployment surface that accepts a URL will
+ * eventually be given one with a slash on the end; normalise it here once.
+ */
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
 
 /**
  * The Supabase client is built on first use rather than at module load.

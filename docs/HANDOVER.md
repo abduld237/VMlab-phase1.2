@@ -334,6 +334,20 @@ state it as a floor.
 
 ## 8. Deployment to Railway
 
+**Deployed and running**, Railway project `scintillating-expression`, EU West:
+
+| | |
+|---|---|
+| Frontend | https://ravishing-courage-production-7828.up.railway.app |
+| API | https://vmlab-phase12-production.up.railway.app |
+
+Health checks: `/health` reports the environment, `/health/db` returns live
+tenant and chunk counts. Neither requires a token, so both are safe to curl
+when something looks wrong.
+
+Sign-in does not work yet — see the SMTP gap in §10. The site loads and the
+API answers; nobody outside the team can get past the login screen.
+
 Two services from the one repo, each with its own **Root Directory** — that
 setting is what makes the monorepo work. Without it Railpack inspects the repo
 root, finds no Python and no `package.json`, and fails during "Build image"
@@ -425,6 +439,23 @@ Railway app installed on `abduld237/VMlab-phase1.2`, which only someone with
 admin on that repo can authorise. `railway up` from the CLI uploads the working
 tree directly and needs no GitHub connection at all.
 
+**A trailing slash on `NEXT_PUBLIC_API_URL` used to break every request**, and
+the symptom pointed nowhere near the cause. `https://…app/` builds
+`https://…app//api/uploads`, which matches no route, so FastAPI answers with
+its framework default `{"detail":"Not Found"}` — capitalised, unlike our own
+lowercase `"not found"` — and the UI shows "Not Found" under the upload form as
+though the record were missing. `lib/api.ts` now strips trailing slashes, so
+the value is forgiving. The capitalisation is still the tell: **"Not Found"
+means the route does not exist; "not found" means RLS returned no rows.**
+
+**Give the web service only its three `NEXT_PUBLIC_` variables.** Pasting the
+API's block into it puts `SUPABASE_SERVICE_ROLE_KEY`, `OPENROUTER_API_KEY` and
+`DATABASE_URL` on a service that serves HTML and nothing else. Next.js inlines
+only `NEXT_PUBLIC_*` into the bundle, so this does not leak to browsers — but
+the service-role key bypasses RLS entirely and has no business being there.
+Delete anything else from that service, `NEXT_PUBLIC_ALLOW_PASSWORD_LOGIN`
+included (§10).
+
 ---
 
 ## 9. Verification checklist
@@ -459,10 +490,10 @@ Against the environment you intend to demonstrate:
 
 ## 10. Known gaps
 
-- **Not yet deployed.** Everything above was verified locally against the
-  live database. The Railway configuration in §8 exists and the two defects
-  that blocked a container build are fixed, but no deployed environment has
-  been through the §9 checklist yet.
+- **Deployed, but not yet verified end to end.** Both services run on Railway
+  (URLs in §8) and the API reaches the live database, but the §9 checklist has
+  only been run locally. Nothing has completed an analysis through the deployed
+  frontend, because sign-in is still blocked on SMTP below.
 - **Coverage is uneven by domain.** Commercial has a mature bespoke corpus;
   Creative VM and Retail Psychology are thinner, so Commercial output reads
   sharper. That is a property of the source material, not a pipeline fault —
