@@ -526,7 +526,10 @@ Against the environment you intend to demonstrate:
   local testing; leave it unset in production.
 - Test users `remon@vmlab.test` (Pilot Retailer One, admin) and
   `tenant-b@vmlab.test` (Pilot Retailer Two, user) exist for isolation testing.
-  Delete both before any real pilot.
+  Delete both before any real pilot — and note that `tenant-b@vmlab.test` now
+  shares Pilot Retailer Two with Abdul, so it can read anything he analyses.
+  That is RLS working as designed, not a leak, but it is a test account sitting
+  inside a real workspace and it should go.
 
 ---
 
@@ -541,17 +544,32 @@ nothing that can drift out of step with the policy.
 tenants, no self-service). `authenticated` has no `insert` on `profiles`, so a
 new user must be assigned by someone with database access:
 
-```sql
-insert into public.profiles (user_id, tenant_id, role, display_name)
-select u.id, t.id, 'admin', 'Their Name'
-from auth.users u, public.tenants t
-where u.email = 'them@example.com' and t.name = 'Pilot Retailer Three';
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+     -v email=them@example.com -v tenant=pilot-three -v role=user \
+     -v name='Their Name' -f db/provision_user.sql
 ```
 
 A signed-in user with no profile row gets **403 "user is not assigned to a
 workspace"** from `deps.py` before any data is touched. That is the intended
-behaviour, not a bug — but it is the first thing a new tester will hit, so
-provision them before they try.
+behaviour, not a bug.
+
+**But treat it as a step in inviting someone, not as an error to respond to.**
+Signing up and being provisioned are separate acts and nothing in the product
+connects them: the login screen accepts anyone, issues a magic link, signs them
+in, shows them the capture screen, and lets them choose a photo — and only when
+they press *Start analysis*, at the first call that touches the API, do they
+learn they have no workspace. Everything before that point works, which makes
+the failure look like a fault in the upload rather than an account that was
+never finished. Abdul hit exactly this on 30 August. Provision people the day
+you invite them.
+
+The workspace assignments as they stand: Abdul is admin of **Pilot Retailer
+Two** (`pilot-two`), which was the empty one — the other two hold test
+analyses. The tenant names are still the placeholders from
+`0005_seed_tenants.sql`; renaming one to a real retailer is
+`update public.tenants set name = '…' where slug = 'pilot-two'`, and nothing
+references the name.
 
 ### A privilege escalation that was live, and how it was found
 
