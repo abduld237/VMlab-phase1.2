@@ -330,6 +330,24 @@ citation instruction ended "if no listed rule supports a point, return an empty
 array", and the model returned empty arrays every time. If a floor matters,
 state it as a floor.
 
+**`capture="environment"` removes the photo library; it does not merely prefer
+the camera.** On a phone, a file input carrying that attribute opens the rear
+camera and offers no other route, so a merchandiser reviewing a photo taken
+earlier has no way to reach it — while desktop, where `capture` is ignored,
+looks perfectly fine. The capture screen therefore keeps two inputs, one with
+the attribute and one without, and hides the camera button behind
+`@media (pointer:coarse)` so that desktop is not offered two buttons that do
+the same thing.
+
+**Do not name HEIC in `accept`.** iOS transcodes HEIC to JPEG on upload unless
+the accept attribute asks for HEIC, and Pillow — with no `pillow-heif` — cannot
+decode HEIF at all. Naming the format means every iPhone photo arrives in
+exactly the encoding the server then rejects as "the file is not a readable
+image". `accept="image/*"` is both broader for the picker and narrower in what
+actually arrives. If HEIC support is ever wanted for its own sake (an Android
+or desktop user uploading a `.heic` file), add `pillow-heif` and register the
+opener; the accept list is not where that gets fixed.
+
 ---
 
 ## 8. Deployment to Railway

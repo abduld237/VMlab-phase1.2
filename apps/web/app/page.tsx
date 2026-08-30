@@ -3,13 +3,28 @@
 /**
  * Screens 2 and 3: capture or upload, add optional context, submit.
  *
- * `capture="environment"` on the file input is what makes a phone open the rear
- * camera directly rather than the photo library, which is the difference
- * between a merchandiser photographing the display in front of them and hunting
- * through their gallery afterwards.
+ * There are two file inputs, not one, and the reason is worth keeping.
+ *
+ * `capture="environment"` makes a phone open the rear camera immediately, which
+ * is right for a merchandiser standing in front of the display. But it is not a
+ * hint -- it removes the photo library entirely, so anyone reviewing a shot
+ * taken earlier has no way in. A single input cannot serve both: with the
+ * attribute the gallery is unreachable, without it the camera costs an extra
+ * tap. So each path gets its own input, and the buttons say which is which.
+ *
+ * The camera button is hidden on pointer-fine devices. `capture` is ignored on
+ * a desktop browser, so both buttons would open the same file dialog there and
+ * one of them would be lying about it.
+ *
+ * `accept` is deliberately `image/*` rather than a list naming HEIC. iOS
+ * transcodes HEIC to JPEG on upload *unless* the accept attribute asks for
+ * HEIC, and the API decodes with Pillow, which has no HEIF support -- so naming
+ * it means every iPhone photo arrives in a format the server then rejects as
+ * "not a readable image". Asking for less gets us more. The real gate is
+ * server-side anyway: validate_and_normalise re-encodes whatever arrives.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ApiError, createAnalysis, getSupabase, uploadImage } from "@/lib/api";
@@ -24,7 +39,8 @@ export default function CapturePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const libraryRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getSupabase().auth.getSession().then(({ data }) => {
@@ -43,6 +59,18 @@ export default function CapturePage() {
     setPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
+
+  /**
+   * Clearing the input's value matters. Without it, choosing the same file
+   * twice in a row fires no change event at all -- the browser compares against
+   * the current value and stays silent -- so a user who retakes a photo, does
+   * not like it, and picks the original again sees the button do nothing.
+   */
+  function pick(event: ChangeEvent<HTMLInputElement>) {
+    const chosen = event.target.files?.[0];
+    event.target.value = "";
+    if (chosen) setFile(chosen);
+  }
 
   async function submit() {
     if (!file) return;
@@ -93,12 +121,19 @@ export default function CapturePage() {
       </header>
 
       <input
-        ref={inputRef}
+        ref={libraryRef}
         type="file"
-        accept="image/jpeg,image/png,image/heic"
+        accept="image/*"
+        className="sr-only"
+        onChange={pick}
+      />
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
         capture="environment"
         className="sr-only"
-        onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+        onChange={pick}
       />
 
       {preview ? (
@@ -109,27 +144,53 @@ export default function CapturePage() {
             alt="The display you photographed"
             className="w-full rounded-lg border border-slate-200 object-cover"
           />
-          <button
-            onClick={() => inputRef.current?.click()}
-            className="text-sm font-medium text-slate-700 underline"
-          >
-            Retake or choose another
-          </button>
+          <div className="flex gap-4">
+            <button
+              onClick={() => libraryRef.current?.click()}
+              className="text-sm font-medium text-slate-700 underline"
+            >
+              Choose a different photo
+            </button>
+            <button
+              onClick={() => cameraRef.current?.click()}
+              className="hidden text-sm font-medium text-slate-700 underline
+                         [@media(pointer:coarse)]:inline"
+            >
+              Retake
+            </button>
+          </div>
         </div>
       ) : (
-        <button
-          onClick={() => inputRef.current?.click()}
-          className="flex h-56 w-full flex-col items-center justify-center gap-2 rounded-lg
-                     border-2 border-dashed border-slate-300 bg-white text-slate-600
-                     transition hover:border-slate-400 focus:outline-none focus:ring-2
-                     focus:ring-slate-400"
-        >
-          <span className="text-3xl" aria-hidden>
-            📷
-          </span>
-          <span className="font-medium">Take a photo or upload one</span>
-          <span className="text-xs text-slate-500">JPEG, PNG or HEIC</span>
-        </button>
+        // Reversed on a phone so the camera sits on top: the common case there
+        // is a merchandiser standing in front of the display. On desktop the
+        // camera button is not rendered at all, so order is moot.
+        <div className="flex flex-col gap-3 [@media(pointer:coarse)]:flex-col-reverse">
+          <button
+            onClick={() => libraryRef.current?.click()}
+            className="flex h-56 w-full flex-col items-center justify-center gap-2 rounded-lg
+                       border-2 border-dashed border-slate-300 bg-white text-slate-600
+                       transition hover:border-slate-400 focus:outline-none focus:ring-2
+                       focus:ring-slate-400"
+          >
+            <span className="text-3xl" aria-hidden>
+              🖼️
+            </span>
+            <span className="font-medium">Choose a photo</span>
+            <span className="text-xs text-slate-500">From this device</span>
+          </button>
+          <button
+            onClick={() => cameraRef.current?.click()}
+            className="hidden w-full items-center justify-center gap-2 rounded-lg border
+                       border-slate-300 bg-white py-3 text-base font-medium text-slate-700
+                       transition hover:border-slate-400 focus:outline-none focus:ring-2
+                       focus:ring-slate-400 [@media(pointer:coarse)]:flex"
+          >
+            <span className="text-xl" aria-hidden>
+              📷
+            </span>
+            Take a photo now
+          </button>
+        </div>
       )}
 
       <section className="mt-6 space-y-4">
