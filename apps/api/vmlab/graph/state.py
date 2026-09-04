@@ -35,11 +35,21 @@ class AnalysisState(TypedDict, total=False):
     hero_product: str | None
     # The active tenant's brand profile. Only ever this tenant's (FR-20).
     brand_context: dict | None
+    # How the user weighted the three specialists for this run, keyed by
+    # perspective value and summing to 100. Set once before the graph starts and
+    # read by the specialists and the reconcile stage; never written by a node,
+    # so it needs no reducer.
+    priorities: dict[str, int]
 
     # --- stage outputs -----------------------------------------------------
     evidence: VisualEvidence
     retrieved: Annotated[dict[str, list[RetrievedChunk]], merge_dicts]
     findings: Annotated[list[SpecialistFinding], operator.add]
+    # The same findings with cross-perspective duplicates removed. A separate
+    # key rather than a rewrite of `findings`: that one accumulates through
+    # `operator.add`, so a node returning a shorter list would append it instead
+    # of replacing it. Written by one node only, hence no reducer here either.
+    reconciled: list[SpecialistFinding]
     synthesis: Synthesis
 
     # --- observability -----------------------------------------------------

@@ -49,20 +49,59 @@ Provide 5 to 7 observations covering fixtures, signage, product grouping,
 lighting and composition. Be concise: one clear sentence per field.{context}"""
 
 
+# One brief per perspective, each in two halves: what the specialist owns, and
+# what it must leave to someone else.
+#
+# The second half exists because the client reported the three sections
+# repeating each other, and the cause is that the domains genuinely overlap on
+# the same physical facts. A weak focal point is at once a composition fault, an
+# attention fault and a hero-visibility fault, so all three specialists reported
+# it and the reader saw one finding three times. Naming an owner for each
+# contested concept is what turns that back into one finding.
+#
+# This is the cheap half of the guard. `reconcile.py` is the half that holds:
+# the specialists run in parallel and cannot see each other, so a prompt can ask
+# for restraint but only code can enforce it. Same division as the citation rule.
 SPECIALIST_BRIEFS: dict[Perspective, str] = {
     Perspective.CREATIVE_VM: """\
 You assess the Creative and Visual Merchandising perspective: styling,
 composition, visual hierarchy, focal point, colour, balance, spacing,
-presentation and overall aesthetic effectiveness, plus fit to brand identity.""",
+presentation and overall aesthetic effectiveness, plus fit to brand identity.
+
+You own composition. Where the eye lands and how the display is arranged are
+yours to judge. What you do not own: how a shopper then behaves, which is Retail
+Psychology's, and whether the arrangement sells the hero product, which is
+Commercial's.""",
     Perspective.RETAIL_PSYCHOLOGY: """\
 You assess the Retail Psychology perspective: likely shopper attention, eye
 flow, clarity, cognitive load, navigation, stopping power, visual cues,
-confidence, trust and likely behavioural response.""",
+confidence, trust and likely behavioural response.
+
+You own the shopper. Attention, eye flow, stopping power and cognitive load are
+yours. What you do not own: whether the composition is well made, which is
+Creative and Visual Merchandising's, and whether pricing and offers are clear,
+which is Commercial's -- you may say what an unreadable price does to a
+shopper's confidence, but the legibility of the price itself is not your
+finding.""",
     Perspective.COMMERCIAL: """\
 You assess the Commercial perspective: hero product visibility, offer
 communication, product hierarchy, pricing clarity, cross-selling opportunity,
-promotional effectiveness and likely sales impact.""",
+promotional effectiveness and likely sales impact.
+
+You own the sale. Hero product visibility, pricing, offers, product hierarchy
+and cross-sell are yours. What you do not own: the aesthetics of how the hero is
+presented, which is Creative and Visual Merchandising's, and the shopper's
+attention path towards it, which is Retail Psychology's.""",
 }
+
+# Slotted into SPECIALIST_SYSTEM for the perspective the user weighted highest,
+# and left empty for the other two. A tie-break has to name a winner or it is
+# not a tie-break, and the slider is what names it -- which is most of why the
+# setting is worth having at all.
+LEAD_PERSPECTIVE_RULE = """
+- You are the lead perspective for this review. Where a point could reasonably
+  belong to you or to another specialist, it is yours: make it, and make it
+  fully."""
 
 SPECIALIST_SYSTEM = """\
 You are a specialist reviewer in a retail display analysis pipeline.
@@ -75,12 +114,16 @@ a knowledge base excerpt carries a rule identifier (for example PCE-014 or
 PPS-032), cite it in supporting_rule_ids for the item it supports.
 
 Rules:
-- Produce between 3 and 5 items. Three is a floor, not a target: a display
-  always affords at least three observations from your perspective, even if
-  some are minor or provisional. Lower the confidence on a weaker item and say
-  what is missing, rather than omitting it. Padding with generic retail advice
-  that is not grounded in the evidence or the excerpts is still not acceptable.
-- Stay inside your perspective. Another specialist covers the others.
+- {depth} Padding with generic retail advice that is not grounded in the
+  evidence or the excerpts is not acceptable at any length: if you cannot
+  support the last item, say what is missing and lower its confidence rather
+  than inventing one.
+- Stay inside your perspective. Two other specialists review this same display
+  from theirs, and the reader sees all three sections side by side -- so a point
+  that belongs to one of them, made here, reaches the reader as the same advice
+  twice. If your strongest observation is really theirs, do not make it your
+  finding. Refer to it in `reason` as context if you need it, then report what
+  only your perspective can see.{ownership}
 - Never state a percentage, sales figure or uplift as fact. You have no such data.
 - Where evidence is thin, lower confidence and say what is missing.
 

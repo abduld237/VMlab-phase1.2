@@ -220,11 +220,132 @@ GET  /api/analyses/{id}   polled by the UI for progress and the result
 
 The pipeline is a LangGraph `StateGraph`: one vision call extracts evidence, one
 embedding drives three domain-filtered retrievals, three specialists run in
-parallel, and synthesis merges them into a ranked top three.
+parallel, a reconcile pass removes findings two of them both made, and synthesis
+merges what is left into a ranked top three.
 
 A failing specialist **degrades rather than aborts** — two perspectives plus an
 honest disclosure beats an error page. The missing perspective is named in the
 uncertainty note.
+
+`build_graph` is called inside `run_analysis`, so every analysis compiles its own
+graph. There is no cached or long-lived graph object anywhere, and nothing to
+invalidate when a setting changes.
+
+### The priority mix
+
+Three sliders on the capture screen weight the specialists for one analysis.
+They total 100, floor at 10 and ceiling at 80 (the ceiling follows from the
+floor: the other two cannot go below 10 between them). The mix is stored on
+`analyses.priority_weights`, because two runs over the same photograph differ
+when the mix differs and an unexplainable report is not worth much.
+
+**The floor is load-bearing.** Zero is always reachable with three sliders and a
+fixed total, and zero would silence a perspective FR-07/08/09 require every
+analysis to carry. Ten percent is quiet, not absent.
+
+A weight becomes a depth band in `graph/priorities.py` — one place, shared by the
+API's request validation and the specialist node:
+
+| weight | items | what changes |
+|---|---|---|
+| ≤20 | 3 | headline points only, one-sentence reasons |
+| 21–45 | 3–4 | **the pre-slider wording, verbatim** |
+| 46–65 | 4–5 | full reasoning, secondary points included |
+| >65 | 5 | systematic, plus the lead-perspective clause |
+
+Item counts stay inside the PRD's 3–5. The slider moves depth further than it
+moves count, and that is deliberate: the count is bounded by a contract, so
+stretching it to give the sliders more travel would have broken FR-07/08/09 to
+win a presentation point. The middle band is the old instruction word for word,
+which is what makes an omitted mix a genuine no-op.
+
+The band sets `min_length`/`max_length` on the response envelope, so the bounds
+reach the provider's decoder through the strict schema rather than being trimmed
+after we have paid for the tokens. One consequence worth knowing: a heavy slider
+asking for five items will *retry* against a model that returns three, and
+`_salvage_items` keeps what it got when the retries do not help.
+
+The heaviest slider also becomes the **lead perspective** and is told so — but
+only when it leads the runner-up by 5 or more. A balanced 34/33/33 names nobody,
+because handing one perspective every contested point on the strength of a
+rounding remainder would be arbitrary.
+
+### Repetition across the three sections, and what fixed it
+
+The client reported the same point appearing under all three perspectives. It
+was real, and structural: all three reason over one shared `VisualEvidence`, and
+the domains genuinely overlap on the same physical facts — a weak focal point is
+a composition fault, an attention fault and a hero-visibility fault at once. All
+three reported it honestly and the reader saw one problem three times.
+
+Two mechanisms, and only the second one holds:
+
+1. **`SPECIALIST_BRIEFS` names an owner** for each contested concept — composition
+   to creative_vm, the shopper to retail_psychology, the sale to commercial —
+   with an explicit "what you do not own" clause naming the other two.
+2. **`graph/nodes/reconcile.py` enforces it.** The specialists run in parallel
+   and cannot see what they are about to duplicate, so the first point in the
+   graph where a duplicate is even visible is after the fan-in. One batched
+   embedding call over every item; the higher-weighted perspective keeps a
+   contested point and the other's copy is dropped.
+
+Same division of labour as the citation guard: the prompt asks, the code makes
+it true.
+
+The survivor records the loser in `also_raised_by`, shown in the UI as *"also
+raised by Commercial"*. Three specialists independently reaching one finding is
+a severity signal — deleting the duplicate without recording it would throw that
+away with the noise.
+
+#### Why there is no similarity threshold
+
+A fixed cosine cutoff is the obvious design and it does not work. Measured on
+two real analyses against hand-labelled duplicates:
+
+| run | true duplicates | first genuinely distinct pair |
+|---|---|---|
+| balanced | .858 .836 .807 .785 | .775 |
+| lopsided | .754 .719 | .683 |
+
+The bands separate cleanly *within* a run but sit at different heights *between*
+runs — a cutoff catching the lopsided run's duplicates at .719 would delete four
+distinct findings from the balanced one. The absolute level tracks how much
+vocabulary a given photograph's findings happen to share, which is not a
+property of anything we control.
+
+So the rule is relative to each analysis's own distribution, on **mean-centred**
+vectors. Centring subtracts the "this display" component every finding shares —
+the part that makes two unrelated findings score 0.6 — and roughly triples the
+gap between a real duplicate and a merely adjacent finding. A pair is a
+duplicate when it sits `duplicate_sigma` (3.5) deviations above the **median**,
+measured by median absolute deviation.
+
+**Median and MAD, not mean and standard deviation**, because both of those are
+moved by the outliers being looked for. Two cases show why, and both were caught
+in testing rather than in production:
+
+- An analysis with *no* duplicates has a tight distribution, so its most similar
+  pair is two standard deviations out by construction and gets struck. This is
+  what `duplicate_similarity_floor` (0.20) also guards.
+- An analysis where nearly *every* finding is duplicated inflates the standard
+  deviation until the bar rises above every real duplicate and nothing at all is
+  caught.
+
+The robust form handles both. Verified across the two real runs plus six
+synthetic distributions from zero duplicates to all-duplicates: every labelled
+duplicate caught, no false positives. 3.5 is the middle of a working range of
+about 3.0–3.9 on that set.
+
+Three guards protect against over-deletion: no perspective drops below two items
+(a one-line section reads as a broken agent, not a quiet one); the floor stops
+the relative rule inventing duplicates; and a failed embedding call degrades to
+no deduplication with a note in `errors` rather than failing the run.
+
+**The embedding call is capped at 8 seconds** (`reconcile_embed_timeout_seconds`)
+and abandoned if it overruns. It normally takes 2–4s, but a rate-limited
+endpoint once backed off for 21.7 — a third of the latency target spent on
+tidying. Deduplication is the one stage that can be skipped without changing
+what the analysis concludes, so it is the one that gives up first.
 
 ### Measured, not estimated
 
@@ -347,6 +468,22 @@ image". `accept="image/*"` is both broader for the picker and narrower in what
 actually arrives. If HEIC support is ever wanted for its own sake (an Android
 or desktop user uploading a `.heic` file), add `pillow-heif` and register the
 opener; the accept list is not where that gets fixed.
+
+**Nothing may be added to `SpecialistItemDraft`.** That model is the wire schema:
+`_schema_for` builds the strict structured-output schema from it, and
+`strict_schema` makes every field required. A field the model has no way to know
+about therefore becomes a field it is *forced to invent*. `also_raised_by` lives
+one layer up on `SpecialistItem`, which the model never sees, and the lift from
+draft to item happens at the end of `run_specialist`. Anything the pipeline
+learns about an item after the model returns belongs there too.
+
+**A hardcoded list of migrations in a test will rot.** `test_api_isolation.py`
+listed the first four by name, so 0005, 0006 and 0007 were silently absent from
+the test schema — a column that existed in production did not exist under test,
+and the first thing that noticed was a query failing at runtime. It globs the
+directory now. `test_retrieval_cap.py` and `test_tenant_session.py` still list
+theirs deliberately: they build a schema *without* RLS on purpose, and globbing
+would apply 0004 and break that.
 
 ---
 
@@ -530,6 +667,21 @@ Against the environment you intend to demonstrate:
   shares Pilot Retailer Two with Abdul, so it can read anything he analyses.
   That is RLS working as designed, not a leak, but it is a test account sitting
   inside a real workspace and it should go.
+- **The duplicate rule is calibrated on two analyses, not twenty.** Every
+  hand-labelled duplicate in those two is caught with no false positives, and
+  the synthetic cases cover the degenerate ends, but two photographs is a small
+  sample for a threshold. Read all three sections of a few more real analyses
+  before treating `duplicate_sigma` as settled. It currently under-removes by
+  design: the weakest real duplicate measured (0.223 centred) sits close enough
+  to the strongest distinct pair (0.232 in another run) that catching it
+  reliably would mean deleting genuine findings.
+- **The design deck has four specialists; the system has three.** The Priority
+  Studio screen in `Presentation.pdf` adds a *Graphic Design* agent covering
+  messaging, hierarchy and signage clarity. Three is wired into the
+  `public.perspective` enum, the RLS policies, the schemas and the UI, so a
+  fourth is a Phase 2 scope item rather than an omission. Say so rather than
+  letting the client read three sliders against his four-slider design as an
+  oversight.
 
 ---
 

@@ -1,7 +1,14 @@
 "use client";
 
 /**
- * Screens 2 and 3: capture or upload, add optional context, submit.
+ * Screens 2 and 3: capture or upload, add optional context, set the priority
+ * mix, submit.
+ *
+ * The mix is per-analysis and deliberately not a saved workspace setting: the
+ * right weighting for a clearance end-cap is not the right weighting for a
+ * flagship window, and the client's own design puts the sliders on the capture
+ * screen for exactly that reason. The browser remembers the last one used as a
+ * convenience, which is a different thing from it being configuration.
  *
  * There are two file inputs, not one, and the reason is worth keeping.
  *
@@ -27,7 +34,15 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ApiError, createAnalysis, getSupabase, uploadImage } from "@/lib/api";
+import PriorityMix from "@/components/PriorityMix";
+import {
+  ApiError,
+  BALANCED_PRIORITIES,
+  createAnalysis,
+  getSupabase,
+  uploadImage,
+  type Priorities,
+} from "@/lib/api";
 
 export default function CapturePage() {
   const router = useRouter();
@@ -36,6 +51,7 @@ export default function CapturePage() {
   const [displayType, setDisplayType] = useState("");
   const [campaignObjective, setCampaignObjective] = useState("");
   const [heroProduct, setHeroProduct] = useState("");
+  const [priorities, setPriorities] = useState<Priorities>(BALANCED_PRIORITIES);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -90,7 +106,7 @@ export default function CapturePage() {
       // on the server and the analysis page polls it. Routing on the analysis
       // id rather than the upload id is what makes that page addressable -- the
       // user can close the tab and come back to the same run.
-      const analysis = await createAnalysis(result.upload_id);
+      const analysis = await createAnalysis(result.upload_id, priorities);
       router.push(`/analysis/${analysis.id}`);
     } catch (err) {
       setError(
@@ -216,6 +232,8 @@ export default function CapturePage() {
           </label>
         ))}
       </section>
+
+      <PriorityMix value={priorities} onChange={setPriorities} disabled={busy} />
 
       {warnings.length > 0 && (
         <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">

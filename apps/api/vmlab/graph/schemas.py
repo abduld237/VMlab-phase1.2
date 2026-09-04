@@ -203,8 +203,16 @@ class VisualEvidence(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class SpecialistItem(BaseModel):
-    """One observation-plus-recommendation pair from a specialist (FR-07..FR-11)."""
+class SpecialistItemDraft(BaseModel):
+    """One observation-plus-recommendation pair as the model returns it.
+
+    This is the wire schema and nothing else may be added to it. Strict
+    structured outputs are built from this model's JSON schema, and
+    `strict_schema` makes every field required -- so a field the model has no
+    way to know about becomes a field it is forced to invent. The reconcile
+    stage's annotations therefore live on `SpecialistItem` below, one layer up,
+    where the model never sees them.
+    """
 
     observation: str
     recommendation: str
@@ -214,6 +222,15 @@ class SpecialistItem(BaseModel):
     # Rule IDs from the retrieved chunks that support this item. Empty means the
     # finding rests on the image alone, which the UI shows differently.
     supporting_rule_ids: list[str] = Field(default_factory=list)
+
+
+class SpecialistItem(SpecialistItemDraft):
+    """A draft plus whatever the reconcile stage learned about it (FR-07..FR-11)."""
+
+    # Which other perspectives independently made the same point before the
+    # duplicate was removed from their section. Written by the reconcile node,
+    # never by the model. Empty is the normal case.
+    also_raised_by: list[Perspective] = Field(default_factory=list)
 
 
 class SpecialistFinding(BaseModel):

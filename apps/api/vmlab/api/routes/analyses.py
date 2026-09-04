@@ -23,6 +23,7 @@ from vmlab.api.deps import CurrentUser, current_user, db, not_found
 from vmlab.config import get_settings
 from vmlab.graph.nodes.validate import ImageRejected, validate_and_normalise
 from vmlab.graph.pipeline import run_analysis
+from vmlab.graph.priorities import Priorities, default_priorities
 from vmlab.graph.schemas import AnalysisResult
 from vmlab.models.openrouter import OpenRouterClient
 from vmlab.retrieval.retriever import Retriever
@@ -66,6 +67,12 @@ class UploadResponse(BaseModel):
 
 class AnalysisRequest(BaseModel):
     upload_id: uuid.UUID
+    # The slider mix from the capture screen. Validation is Priorities' own --
+    # a mix that does not total 100 comes back as a 422 naming the total it did
+    # reach, rather than being quietly rescaled into something the user never
+    # set. Omitting it entirely is balanced, which reproduces the behaviour from
+    # before the sliders existed.
+    priorities: Priorities = Field(default_factory=default_priorities)
 
 
 class BrandRequest(BaseModel):
@@ -198,6 +205,8 @@ async def create_analysis(
 
         brand = await _brand_context(connection, user)
 
+    weights = body.priorities.as_dict()
+
     # Written on its own connection so it is committed before this handler
     # returns. On the request's connection it would stay uncommitted until the
     # dependency closes the transaction -- and the detached task below would
@@ -206,11 +215,12 @@ async def create_analysis(
         async with own.cursor(row_factory=dict_row) as cursor:
             await cursor.execute(
                 """
-                insert into public.analyses (tenant_id, upload_id, requested_by, status)
-                values (%s, %s, %s, 'validating')
+                insert into public.analyses
+                    (tenant_id, upload_id, requested_by, status, priority_weights)
+                values (%s, %s, %s, 'validating', %s)
                 returning id
                 """,
-                (user.tenant_id, upload["id"], user.user_id),
+                (user.tenant_id, upload["id"], user.user_id, json.dumps(weights)),
             )
             analysis_id = str((await cursor.fetchone())["id"])
 
@@ -235,6 +245,7 @@ async def create_analysis(
             hero_product=upload["hero_product"],
             quality_flags=quality_flags,
             brand=brand,
+            priorities=weights,
         )
     )
     _RUNNING.add(task)
@@ -259,6 +270,7 @@ async def _execute_analysis(
     hero_product: str | None,
     quality_flags: list[str],
     brand: dict | None,
+    priorities: dict[str, int],
 ) -> None:
     """Run the graph outside the request and record the outcome either way.
 
@@ -292,6 +304,7 @@ async def _execute_analysis(
                 campaign_objective=campaign_objective,
                 hero_product=hero_product,
                 brand_context=brand,
+                priorities=priorities,
                 on_stage=report,
             )
     except Exception as exc:  # noqa: BLE001 - the row must record the failure
@@ -489,7 +502,7 @@ async def get_analysis(
             """
             select id, status::text as status, visual_evidence, overall_summary,
                    uncertainty_note, stage_timings_ms, model_versions, cost_usd,
-                   error_detail, created_at, completed_at
+                   priority_weights, error_detail, created_at, completed_at
             from public.analyses
             where id = %s
             """,

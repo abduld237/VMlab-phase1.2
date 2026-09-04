@@ -166,6 +166,60 @@ class Settings(BaseSettings):
     analysis_timeout_seconds: int = 120
     retrieval_top_k: int = 8
 
+    # When two findings from *different* perspectives are the same point, so the
+    # lower-weighted one is dropped and the survivor credits it. See
+    # graph/nodes/reconcile.py.
+    #
+    # A fixed cosine threshold was tried first and does not work, which is worth
+    # recording because it is the obvious thing to reach for again. Measured on
+    # two real analyses against hand-labelled duplicates:
+    #
+    #   run          true duplicates      first genuinely distinct pair
+    #   balanced     .858 .836 .807 .785  .775
+    #   lopsided     .754 .719            .683
+    #
+    # The bands do not overlap *within* a run, but they sit at different heights
+    # *between* runs -- a threshold catching the lopsided run's duplicates at
+    # .719 would delete four distinct findings from the balanced one. There is
+    # no single number that works, because the absolute level tracks how much
+    # vocabulary a given photograph's findings happen to share.
+    #
+    # So the comparison is relative to each analysis's own spread, on
+    # mean-centred vectors -- centring removes the "this display" component that
+    # every finding shares and that inflates the baseline. A pair is a duplicate
+    # when it sits at least `duplicate_sigma` deviations above the *median* of
+    # that analysis's cross-perspective pairs, measured by median absolute
+    # deviation and scaled by 1.4826 so the number reads as a normal sigma.
+    #
+    # Median and MAD rather than mean and standard deviation, because both of
+    # those are moved by the very outliers being looked for. Two cases show it:
+    # an analysis with no duplicates has a tight distribution, so its most
+    # similar pair sits two standard deviations out by construction and gets
+    # struck; and an analysis where nearly every finding is duplicated inflates
+    # the standard deviation so far that the bar rises above every real
+    # duplicate and nothing is caught at all. The robust statistics handle both
+    # -- verified on the two runs above plus six synthetic distributions from
+    # zero duplicates to all-duplicates, with every labelled duplicate caught
+    # and no false positives.
+    #
+    # 3.5 is the middle of a working range of roughly 3.0 to 3.9 on that set,
+    # rather than a value fitted to it. Lower it to remove more, raise it to
+    # remove less. Recalibrate by reading all three sections of real analyses;
+    # stub embeddings tell you nothing.
+    duplicate_sigma: float = 3.5
+    # The floor is what stops a relative rule manufacturing duplicates in a
+    # report that has none: some pair is always the furthest out. Nothing below
+    # this is a duplicate however far from its own distribution it sits. 0.20
+    # sits under the weakest real duplicate measured (0.223) and over the
+    # strongest genuinely distinct pair in the run that produced it (0.075).
+    duplicate_similarity_floor: float = 0.20
+    # How long to wait for the one embedding call reconciliation needs before
+    # giving up on it. Measured at 2.3s, 3.5s and once 21.7s -- that last one on
+    # a rate-limited endpoint backing off, which is exactly the case worth
+    # capping. A tidier report is not worth a third of the 60s budget, and the
+    # stage already degrades to passing findings through untouched.
+    reconcile_embed_timeout_seconds: float = 8.0
+
     # --- Tracing -----------------------------------------------------------
     # LangSmith is off unless explicitly switched on. It is a debugging tool,
     # not part of the product: when enabled, every graph run -- including the

@@ -23,6 +23,13 @@ import {
   type SpecialistItem,
 } from "@/lib/api";
 
+/** Short forms, for the "also raised by" line where the full labels crowd. */
+const SHORT_LABELS: Record<Perspective, string> = {
+  creative_vm: "Creative / VM",
+  retail_psychology: "Retail Psychology",
+  commercial: "Commercial",
+};
+
 const ACCENT: Record<Perspective, string> = {
   creative_vm: "border-creative/40 bg-creative/5",
   retail_psychology: "border-psychology/40 bg-psychology/5",
@@ -117,6 +124,16 @@ function Item({
             {item.supporting_rule_ids.join(", ")}
           </span>
         )}
+        {item.also_raised_by && item.also_raised_by.length > 0 && (
+          // Another perspective reached the same conclusion and its copy was
+          // removed rather than shown twice. Saying so keeps the corroboration
+          // -- two specialists agreeing is a severity signal -- without the
+          // reader having to read the same finding again to discover it.
+          <span>
+            Also raised by{" "}
+            {item.also_raised_by.map((p) => SHORT_LABELS[p]).join(" and ")}
+          </span>
+        )}
       </div>
 
       <FeedbackButtons
@@ -171,6 +188,10 @@ function ActionCard({
 
 export default function Results({ analysis }: { analysis: Analysis }) {
   const ordered: Perspective[] = ["creative_vm", "retail_psychology", "commercial"];
+  // Empty for analyses run before the sliders existed. Showing nothing is the
+  // honest rendering of that -- filling in 34/33/33 would claim a mix the user
+  // never chose.
+  const weights = analysis.priority_weights ?? {};
   const present = new Set(analysis.sections.map((s) => s.perspective));
   const missing = ordered.filter((p) => !present.has(p));
 
@@ -221,6 +242,14 @@ export default function Results({ analysis }: { analysis: Analysis }) {
                 <h3 className="flex items-center gap-2 font-semibold text-slate-900">
                   <span className={`h-2.5 w-2.5 rounded-full ${DOT[perspective]}`} />
                   {PERSPECTIVE_LABELS[perspective]}
+                  {weights[perspective] !== undefined && (
+                    // The mix is what decided how long this section is and
+                    // which contested points it kept, so a reader comparing two
+                    // reviews of the same display needs it on the page.
+                    <span className="ml-auto shrink-0 text-xs font-normal text-slate-500">
+                      {weights[perspective]}% priority
+                    </span>
+                  )}
                 </h3>
                 <ul className="mt-3">
                   {section.items.map((item, index) => (

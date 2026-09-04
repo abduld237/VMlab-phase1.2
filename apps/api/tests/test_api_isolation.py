@@ -96,13 +96,18 @@ def api(tmp_path_factory):
 
     with psycopg.connect(url, autocommit=True) as conn:
         conn.execute("create role authenticated nologin")
-        for name in [
-            "db/test/00_supabase_stubs.sql",
-            "db/migrations/0001_extensions_and_tenancy.sql",
-            "db/migrations/0002_core_tables.sql",
-            "db/migrations/0003_feedback_audit_kb.sql",
-            "db/migrations/0004_rls_policies.sql",
-        ]:
+        # Globbed rather than listed. This was a hardcoded list of the first
+        # four migrations, so every later one was silently absent from the test
+        # schema -- a column added in 0007 existed in production and not here,
+        # and the first thing that noticed was a query failing at runtime. The
+        # sort is what makes the glob safe: migrations are ordered by filename.
+        paths = ["db/test/00_supabase_stubs.sql"]
+        paths += sorted(
+            os.path.join("db/migrations", entry)
+            for entry in os.listdir(os.path.join(ROOT, "db/migrations"))
+            if entry.endswith(".sql")
+        )
+        for name in paths:
             with open(os.path.join(ROOT, name)) as handle:
                 conn.execute(handle.read())
 
@@ -350,6 +355,106 @@ async def test_starting_an_analysis_on_a_missing_upload_is_refused(client):
 async def test_starting_an_analysis_requires_authentication(client):
     response = await client.post("/api/analyses", json={"upload_id": str(uuid.uuid4())})
     assert response.status_code in (401, 403)
+
+
+async def test_a_priority_mix_that_does_not_total_one_hundred_is_refused(client):
+    """Rejected rather than rescaled.
+
+    Normalising a bad mix would run the analysis against sliders the user never
+    set, and they would have no way of knowing -- the report would simply be
+    weighted wrongly.
+    """
+    created = await client.post(
+        "/api/uploads",
+        files={"file": ("display.jpg", photo_bytes(), "image/jpeg")},
+        headers=auth(ALICE),
+    )
+    upload_id = created.json()["upload_id"]
+
+    response = await client.post(
+        "/api/analyses",
+        json={
+            "upload_id": upload_id,
+            "priorities": {"creative_vm": 50, "retail_psychology": 30, "commercial": 30},
+        },
+        headers=auth(ALICE),
+    )
+
+    assert response.status_code == 422, response.text
+    assert "100" in response.text
+
+
+async def test_a_priority_mix_may_not_silence_a_perspective(client):
+    created = await client.post(
+        "/api/uploads",
+        files={"file": ("display.jpg", photo_bytes(), "image/jpeg")},
+        headers=auth(ALICE),
+    )
+    response = await client.post(
+        "/api/analyses",
+        json={
+            "upload_id": created.json()["upload_id"],
+            "priorities": {"creative_vm": 0, "retail_psychology": 50, "commercial": 50},
+        },
+        headers=auth(ALICE),
+    )
+    assert response.status_code == 422, response.text
+
+
+async def test_the_mix_is_recorded_against_the_analysis(client):
+    """An analysis that cannot be explained later is a report nobody can trust.
+
+    Two runs over the same photograph differ when the mix differs, so the mix
+    has to be stored beside the result rather than inferred from it.
+    """
+    created = await client.post(
+        "/api/uploads",
+        files={"file": ("display.jpg", photo_bytes(), "image/jpeg")},
+        headers=auth(ALICE),
+    )
+    mix = {"creative_vm": 60, "retail_psychology": 25, "commercial": 15}
+
+    response = await client.post(
+        "/api/analyses",
+        json={"upload_id": created.json()["upload_id"], "priorities": mix},
+        headers=auth(ALICE),
+    )
+    assert response.status_code == 202, response.text
+
+    from vmlab.tenancy.session import service_session
+
+    async with service_session() as connection:
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                "select priority_weights from public.analyses where id = %s",
+                (response.json()["id"],),
+            )
+            assert (await cursor.fetchone())[0] == mix
+
+
+async def test_an_omitted_mix_is_stored_as_balanced(client):
+    created = await client.post(
+        "/api/uploads",
+        files={"file": ("display.jpg", photo_bytes(), "image/jpeg")},
+        headers=auth(ALICE),
+    )
+    response = await client.post(
+        "/api/analyses", json={"upload_id": created.json()["upload_id"]}, headers=auth(ALICE)
+    )
+    assert response.status_code == 202, response.text
+
+    from vmlab.tenancy.session import service_session
+
+    async with service_session() as connection:
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                "select priority_weights from public.analyses where id = %s",
+                (response.json()["id"],),
+            )
+            stored = (await cursor.fetchone())[0]
+
+    assert sum(stored.values()) == 100
+    assert stored == {"creative_vm": 34, "retail_psychology": 33, "commercial": 33}
 
 
 # -- brand profile writes ---------------------------------------------------

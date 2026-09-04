@@ -18,14 +18,16 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, create_model
 
 from vmlab.config import get_settings
 from vmlab.graph import prompts
+from vmlab.graph.priorities import Band, balanced_weights, band_for, lead_perspective
 from vmlab.graph.schemas import (
     Perspective,
     SpecialistFinding,
     SpecialistItem,
+    SpecialistItemDraft,
     Synthesis,
     VisualEvidence,
 )
@@ -52,13 +54,35 @@ class SpecialistItems(BaseModel):
 
     Models are markedly more reliable returning a named array inside an object
     than a bare top-level array, so the envelope is asked for and unwrapped here.
+
+    This is the balanced-mix shape. A weighted analysis uses `items_envelope`
+    below, which is the same model with the bounds moved.
     """
 
     # FR-07/08/09 require three to five. Asking pydantic to enforce the floor is
     # what turns a thin answer into a retry instead of into a section the client
     # can see is short. Retries cost about four seconds now, so the floor is
     # affordable in a way it was not when a specialist took seventy.
-    items: list[SpecialistItem] = Field(min_length=3)
+    items: list[SpecialistItemDraft] = Field(min_length=3)
+
+
+@lru_cache(maxsize=16)
+def items_envelope(min_items: int, max_items: int) -> type[BaseModel]:
+    """The envelope model for one priority band.
+
+    Built per band rather than validated afterwards so the bounds reach the
+    provider: `_schema_for` turns this into the strict JSON schema the decoder
+    enforces, which means a muted specialist is *prevented* from returning five
+    items rather than having two of them trimmed off after we paid for them.
+
+    Cached because `_schema_for` keys its own cache on the type object -- a
+    fresh class per call would rebuild the schema on every analysis and never
+    hit either cache.
+    """
+    return create_model(
+        f"SpecialistItems{min_items}To{max_items}",
+        items=(list[SpecialistItemDraft], Field(min_length=min_items, max_length=max_items)),
+    )
 
 
 # Keys a model plausibly uses for the items array when it ignores the envelope.
@@ -251,14 +275,18 @@ async def _call_json(
     )
 
 
-def _salvage_items(outcome: CallOutcome | None) -> list[SpecialistItem]:
+def _salvage_items(outcome: CallOutcome | None, max_items: int = 5) -> list[SpecialistItem]:
     """Recover whatever valid items the last failed attempt did contain.
 
-    The envelope demands three items, so a specialist that can only find two
-    fails validation on every attempt and would otherwise be dropped entirely.
-    Two grounded findings are worth more to the reader than a missing
-    perspective, and far more than a retry loop that ends in nothing -- so the
-    floor drives a retry, and this is what happens when the retry does not help.
+    The envelope demands a floor of items, so a specialist that can only find
+    one below it fails validation on every attempt and would otherwise be
+    dropped entirely. Two grounded findings are worth more to the reader than a
+    missing perspective, and far more than a retry loop that ends in nothing --
+    so the floor drives a retry, and this is what happens when the retry does
+    not help.
+
+    The cap follows the band rather than a fixed five: an over-long response
+    from a muted specialist is trimmed to what the user actually asked for.
     """
     if outcome is None or outcome.completion is None:
         return []
@@ -276,7 +304,7 @@ def _salvage_items(outcome: CallOutcome | None) -> list[SpecialistItem]:
             salvaged.append(SpecialistItem.model_validate(entry))
         except ValidationError:
             continue
-    return salvaged[:5]
+    return salvaged[:max_items]
 
 
 def _permitted_rule_ids(chunks: list[RetrievedChunk]) -> set[str]:
@@ -409,6 +437,19 @@ async def extract_evidence(state: AnalysisState, client: OpenRouterClient) -> di
     }
 
 
+def _band_and_ownership(state: AnalysisState, perspective: Perspective) -> tuple[Band, str]:
+    """This specialist's depth band, and whether it leads the review.
+
+    Weights are absent for anything started before the priority mix existed and
+    for direct callers that do not care, so they fall back to balanced -- which
+    resolves to the band carrying the pipeline's original wording verbatim.
+    """
+    weights = state.get("priorities") or balanced_weights()
+    band = band_for(weights.get(perspective.value, 0))
+    leads = lead_perspective(weights) is perspective
+    return band, prompts.LEAD_PERSPECTIVE_RULE if leads else ""
+
+
 async def run_specialist(
     state: AnalysisState, client: OpenRouterClient, perspective: Perspective
 ) -> dict:
@@ -416,6 +457,7 @@ async def run_specialist(
     settings = get_settings()
     started = time.monotonic()
 
+    band, ownership = _band_and_ownership(state, perspective)
     chunks = (state.get("retrieved") or {}).get(perspective.value, [])
     context = prompts.format_context(
         state.get("display_type"),
@@ -454,7 +496,9 @@ async def run_specialist(
         {
             "role": "system",
             "content": prompts.SPECIALIST_SYSTEM.format(
-                brief=prompts.SPECIALIST_BRIEFS[perspective]
+                brief=prompts.SPECIALIST_BRIEFS[perspective],
+                depth=band.depth,
+                ownership=ownership,
             ),
         },
         {
@@ -474,7 +518,7 @@ async def run_specialist(
             client,
             model=settings.reasoning_model,
             messages=messages,
-            schema=SpecialistItems,
+            schema=items_envelope(band.min_items, band.max_items),
             coerce=_coerce_items,
             reasoning=_reasoning_for(settings.reasoning_effort),
             # The retry message becomes the last thing the model reads, so the
@@ -492,14 +536,15 @@ async def run_specialist(
 
         # Short of the three-item floor is not the same failure as unusable
         # output. Keep what was grounded and record that it came up short.
-        salvaged = _salvage_items(spent)
+        salvaged = _salvage_items(spent, band.max_items)
         if salvaged:
             _enforce_citations(salvaged, permitted, perspective.value)
             return {
                 "findings": [SpecialistFinding(perspective=perspective, items=salvaged)],
                 "errors": [
                     f"{perspective.value} returned only {len(salvaged)} "
-                    f"{'item' if len(salvaged) == 1 else 'items'} against a floor of three"
+                    f"{'item' if len(salvaged) == 1 else 'items'} against a floor of "
+                    f"{band.min_items}"
                 ],
                 "stage_timings_ms": timing,
                 **telemetry,
@@ -512,8 +557,11 @@ async def run_specialist(
             **telemetry,
         }
 
-    _enforce_citations(parsed.items, permitted, perspective.value)
-    finding = SpecialistFinding(perspective=perspective, items=parsed.items)
+    # Drafts are the model's shape; SpecialistItem is ours. The lift happens
+    # here so nothing downstream has to know the difference.
+    items = [SpecialistItem.model_validate(draft.model_dump()) for draft in parsed.items]
+    _enforce_citations(items, permitted, perspective.value)
+    finding = SpecialistFinding(perspective=perspective, items=items)
     return {
         "findings": [finding],
         "stage_timings_ms": {perspective.value: int((time.monotonic() - started) * 1000)},
@@ -526,7 +574,10 @@ async def synthesise(state: AnalysisState, client: OpenRouterClient) -> dict:
     settings = get_settings()
     started = time.monotonic()
 
-    findings = state.get("findings", [])
+    # Prefer the reconciled set: a point the reconcile stage removed as a
+    # duplicate must not come back here and be counted as two perspectives
+    # agreeing. `findings` is the fallback for a reconcile that degraded.
+    findings = state.get("reconciled") or state.get("findings", [])
     if not findings:
         raise OpenRouterError("no specialist findings to synthesise")
 

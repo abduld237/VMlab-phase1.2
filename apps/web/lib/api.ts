@@ -53,6 +53,37 @@ export type SpecialistItem = {
   confidence: number;
   severity: string;
   supporting_rule_ids: string[];
+  /**
+   * Perspectives that independently made this same point before the duplicate
+   * was removed from their section. Optional because analyses stored before the
+   * reconcile stage existed have no such field, and rendering `undefined` as
+   * "also raised by nobody" would be a lie about old results.
+   */
+  also_raised_by?: Perspective[];
+};
+
+/**
+ * How much of the review each specialist owns, as percentages totalling 100.
+ *
+ * The API validates this, so a mix that does not add up comes back as a 422
+ * rather than being quietly rescaled -- which is why the slider component below
+ * must keep the sum exact rather than leaving it to the server to sort out.
+ */
+export type Priorities = {
+  creative_vm: number;
+  retail_psychology: number;
+  commercial: number;
+};
+
+export const PRIORITY_MIN = 10;
+export const PRIORITY_MAX = 80;
+export const PRIORITY_TOTAL = 100;
+
+/** Matches default_priorities() in the API. The remainder has to land somewhere. */
+export const BALANCED_PRIORITIES: Priorities = {
+  creative_vm: 34,
+  retail_psychology: 33,
+  commercial: 33,
 };
 
 export type AnalysisSection = {
@@ -81,6 +112,8 @@ export type Analysis = {
   visual_evidence: Record<string, unknown> | null;
   stage_timings_ms: Record<string, number>;
   cost_usd: number | null;
+  /** The mix this analysis ran with. `{}` for anything run before sliders existed. */
+  priority_weights: Partial<Priorities>;
   error_detail: string | null;
   created_at: string;
   completed_at: string | null;
@@ -157,11 +190,12 @@ export async function uploadImage(
  */
 export async function createAnalysis(
   uploadId: string,
+  priorities: Priorities = BALANCED_PRIORITIES,
 ): Promise<{ id: string; status: Analysis["status"] }> {
   const response = await fetch(`${API_URL}/api/analyses`, {
     method: "POST",
     headers: { ...(await authHeaders()), "Content-Type": "application/json" },
-    body: JSON.stringify({ upload_id: uploadId }),
+    body: JSON.stringify({ upload_id: uploadId, priorities }),
   });
   return handle<{ id: string; status: Analysis["status"] }>(response);
 }
@@ -226,6 +260,17 @@ export const PERSPECTIVE_LABELS: Record<Perspective, string> = {
   creative_vm: "Creative / Visual Merchandising",
   retail_psychology: "Retail Psychology & Customer Behaviour",
   commercial: "Commercial Performance",
+};
+
+/**
+ * What a higher slider buys, in the client's own words from the design deck.
+ * Shown under each slider so the setting is self-explanatory on the screen
+ * rather than in a help page nobody opens.
+ */
+export const PRIORITY_EFFECTS: Record<Perspective, string> = {
+  creative_vm: "More on styling, composition and brand presentation",
+  retail_psychology: "More on eye flow, attention and shopper behaviour",
+  commercial: "More on hero products, pricing and offer clarity",
 };
 
 export const EFFORT_LABELS: Record<PrioritisedAction["effort"], string> = {

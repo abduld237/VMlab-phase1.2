@@ -134,7 +134,11 @@ class StubClient:
         brief = messages[0]["content"]
         self.specialist_prompts.append(brief)
         for name in self.failing:
-            if name.lower() in brief.lower():
+            # Matched against the brief's opening line, not against the whole
+            # prompt. Each brief now names the other two perspectives when it
+            # says what it does *not* own, so a bare "Retail Psychology" appears
+            # in all three and would fail whichever specialist ran first.
+            if f"you assess the {name}".lower() in brief.lower():
                 raise OpenRouterError(f"stubbed failure for {name}")
 
         return Completion(
@@ -204,6 +208,68 @@ async def test_each_specialist_receives_its_own_brief():
     assert "visual hierarchy" in joined
     assert "cognitive load" in joined
     assert "cross-selling" in joined
+
+
+async def test_a_muted_slider_asks_for_less_and_a_heavy_one_asks_for_more():
+    """The slider has to change the instruction, or it changes nothing."""
+    client = StubClient()
+
+    await run_analysis(
+        client=client,
+        retriever=None,
+        image_bytes=b"fake",
+        tenant_id=None,
+        priorities={"creative_vm": 70, "retail_psychology": 10, "commercial": 20},
+    )
+
+    by_perspective = {
+        "creative_vm": next(p for p in client.specialist_prompts if "You own composition" in p),
+        "retail_psychology": next(
+            p for p in client.specialist_prompts if "You own the shopper" in p
+        ),
+        "commercial": next(p for p in client.specialist_prompts if "You own the sale" in p),
+    }
+
+    assert "Produce exactly 5 items" in by_perspective["creative_vm"]
+    assert "Produce exactly 3 items" in by_perspective["retail_psychology"]
+    assert "Produce exactly 3 items" in by_perspective["commercial"]
+
+
+async def test_only_the_heaviest_perspective_is_told_it_leads():
+    """A tie-break that names two winners is not a tie-break."""
+    client = StubClient()
+
+    await run_analysis(
+        client=client,
+        retriever=None,
+        image_bytes=b"fake",
+        tenant_id=None,
+        priorities={"creative_vm": 70, "retail_psychology": 10, "commercial": 20},
+    )
+
+    # Deduplicated: a schema retry re-sends the same prompt, and the stub always
+    # returns three items, so the specialist asked for five retries three times.
+    leading = {p for p in client.specialist_prompts if "lead perspective" in p}
+    assert len(leading) == 1
+    assert "You own composition" in next(iter(leading))
+
+
+async def test_a_balanced_mix_names_no_leader():
+    client = StubClient()
+
+    await run_analysis(client=client, retriever=None, image_bytes=b"fake", tenant_id=None)
+
+    assert not [p for p in client.specialist_prompts if "lead perspective" in p]
+
+
+async def test_an_omitted_mix_reproduces_the_pre_slider_prompt():
+    """Adding the feature must be a no-op for anyone who ignores it."""
+    client = StubClient()
+
+    await run_analysis(client=client, retriever=None, image_bytes=b"fake", tenant_id=None)
+
+    for prompt in client.specialist_prompts:
+        assert "Three is a floor, not a target" in prompt
 
 
 async def test_quality_flags_carry_into_the_result():
